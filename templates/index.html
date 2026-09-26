@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kundenverwaltung</title>
+<link rel="stylesheet" href="/customer_mgr/static/app.css?v={{ data['version'] }}">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="back" href="/" title="Zurück zum Panel">aaPanel</a>
+    <h1>Kunden</h1>
+    <nav class="views" aria-label="Ansichten">
+      <button type="button" data-view="customers" class="on">Kunden</button>
+      <button type="button" data-view="resources">Alle Ressourcen</button>
+      <button type="button" data-view="orphans">Prüfung</button>
+      <button type="button" data-view="settings">Einstellungen</button>
+    </nav>
+  </header>
+
+  <!-- Kunden -->
+  <section class="view split" id="view-customers">
+    <aside class="list">
+      <div class="list-head">
+        <input type="search" id="q" placeholder="Kunde, Nummer oder Domain suchen" aria-label="Suchen">
+        <button type="button" class="primary" id="btn-new">Neuer Kunde</button>
+      </div>
+      <ul id="customer-list" class="customers"></ul>
+    </aside>
+    <div class="detail" id="detail">
+      <div class="empty"><p>Wähle links einen Kunden oder lege einen neuen an.</p></div>
+    </div>
+  </section>
+
+  <!-- Alle Ressourcen -->
+  <section class="view" id="view-resources" hidden>
+    <div class="bar">
+      <input type="search" id="rq" placeholder="Domain oder Mailadresse filtern" aria-label="Filtern">
+      <label class="check"><input type="checkbox" id="only-free"> Nur nicht zugeordnete</label>
+      <span class="meta" id="res-meta"></span>
+      <button type="button" id="btn-refresh">Aus Panel neu laden</button>
+    </div>
+    <div id="res-warn"></div>
+    <div id="res-list" class="domains"></div>
+  </section>
+
+  <!-- Prüfung -->
+  <section class="view" id="view-orphans" hidden>
+    <div class="bar">
+      <p class="meta">Zuordnungen, deren Website, Mail-Domain oder Mailbox im Panel nicht mehr existiert.</p>
+      <button type="button" id="btn-orphans">Jetzt prüfen</button>
+    </div>
+    <div id="orphan-list"></div>
+  </section>
+
+  <!-- Einstellungen -->
+  <section class="view narrow" id="view-settings" hidden>
+    <form id="settings-form" autocomplete="off">
+      <h2>API-Verbindung</h2>
+      <p class="hint">Im Panel unter Einstellungen → API: API aktivieren und <code>127.0.0.1</code> in die IP-Whitelist eintragen.</p>
+      <label>API-Key <input type="password" name="api_key" placeholder="unverändert lassen"><small id="key-hint"></small></label>
+      <label>Panel-Adresse <input name="base_url"><small id="base-hint"></small></label>
+      <label>Daten-Endpunkt <input name="data_path"><small>Standard <code>/v2/data</code>, <code>/data</code> wird als Fallback versucht.</small></label>
+      <label>Zusätzliche Projekttypen <input name="site_project_types"><small>Ohne Angabe liefert aaPanel nur PHP- und WordPress-Sites. Kommagetrennt.</small></label>
+
+      <h2>Mailserver</h2>
+      <label>Plugin-Pfade <input name="mail_plugin_paths"><small>Werden der Reihe nach versucht, kommagetrennt.</small></label>
+      <label>Methode für Domains <input name="mail_domains_method"></label>
+      <label>Methode für Mailboxen <input name="mail_boxes_method"></label>
+      <label class="check"><input type="checkbox" name="mail_db_fallback"> Wenn die Mail-API scheitert, Mailserver-Datenbank lesend verwenden</label>
+
+      <h2>Kunden</h2>
+      <label>Präfix Kundennummer <input name="customer_prefix"></label>
+
+      <div class="actions">
+        <button type="submit" class="primary">Speichern</button>
+        <button type="button" id="btn-test">Verbindung testen</button>
+      </div>
+      <div id="test-out"></div>
+    </form>
+
+    <details class="diag">
+      <summary>API-Rohaufruf (Diagnose)</summary>
+      <p class="hint">Zum Prüfen von Endpunkten. Pfad und Parameter aus den Browser-Devtools (F12 → Network) übernehmen.</p>
+      <label>Pfad <input id="raw-path" value="/v2/plugin?action=a"></label>
+      <label>Parameter (JSON) <textarea id="raw-params" rows="4">{"name": "mail_sys", "s": "get_domains", "p": 1}</textarea></label>
+      <button type="button" id="btn-raw">Aufrufen</button>
+      <pre id="raw-out"></pre>
+    </details>
+  </section>
+</div>
+
+<dialog id="dlg-customer">
+  <form method="dialog" id="customer-form">
+    <h2 id="cf-title">Neuer Kunde</h2>
+    <input type="hidden" name="id">
+    <div class="grid">
+      <label class="wide">Firma <input name="company"></label>
+      <label>Vorname <input name="first_name"></label>
+      <label>Nachname <input name="last_name"></label>
+      <label>E-Mail <input name="email" type="email"></label>
+      <label>Telefon <input name="phone"></label>
+      <label class="wide">Straße <input name="street"></label>
+      <label>PLZ <input name="zip"></label>
+      <label>Ort <input name="city"></label>
+      <label>Land <input name="country"></label>
+      <label>UID-Nummer <input name="vat_id"></label>
+      <label>Kundennummer <input name="customer_no" placeholder="automatisch"></label>
+      <label>Status
+        <select name="status"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select>
+      </label>
+      <label class="wide">Notiz <textarea name="note" rows="3"></textarea></label>
+    </div>
+    <p class="form-err" id="cf-err"></p>
+    <div class="actions">
+      <button type="button" class="primary" id="cf-save">Speichern</button>
+      <button type="button" data-close>Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-assign" class="large">
+  <div class="assign">
+    <h2>Ressourcen zuordnen</h2>
+    <p class="hint">Zeigt nur Ressourcen, die noch keinem Kunden gehören. Der Haken bei einer Domain wählt Website, Mail-Domain und alle Mailboxen dieser Domain.</p>
+    <input type="search" id="aq" placeholder="Domain filtern" aria-label="Domain filtern">
+    <div id="assign-list" class="domains pick"></div>
+    <div class="actions">
+      <span class="meta" id="assign-count">0 ausgewählt</span>
+      <button type="button" class="primary" id="assign-save">Zuordnen</button>
+      <button type="button" data-close>Abbrechen</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>window.CM_TOKEN = "{{ data['csrf_token'] }}";</script>
+<script src="/customer_mgr/static/app.js?v={{ data['version'] }}"></script>
+</body>
+</html>

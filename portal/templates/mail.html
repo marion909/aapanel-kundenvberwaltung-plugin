@@ -1,0 +1,60 @@
+{% extends 'layout.html' %}
+{% block title %}E-Mail – Kundenportal{% endblock %}
+{% block content %}
+<h1>E-Mail</h1>
+
+<h2>Mail-Domains</h2>
+{% if not domains %}
+<p class="empty">Dir sind aktuell keine Mail-Domains zugeordnet.</p>
+{% else %}
+<ul class="plain">
+{% for d in domains %}
+<li>{{ d.ref_name }}{% if d.state == 'missing' %} <span class="badge warn">im Panel nicht mehr vorhanden</span>{% endif %}</li>
+{% endfor %}
+</ul>
+
+<h2>Neues Postfach anlegen</h2>
+<form method="post" action="{{ url_for('mail_box_create') }}" class="inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="text" name="local" placeholder="Postfachname" required>
+  <span>@</span>
+  <select name="domain" required>
+    {% for d in domains if d.state != 'missing' %}
+    <option value="{{ d.ref_name }}">{{ d.ref_name }}</option>
+    {% endfor %}
+  </select>
+  <input type="password" name="password" placeholder="Passwort (min. 8 Zeichen)" required minlength="8">
+  <button type="submit" class="primary">Anlegen</button>
+</form>
+{% endif %}
+
+<h2>Postfächer</h2>
+{% if not boxes %}
+<p class="empty">Dir sind aktuell keine Postfächer zugeordnet.</p>
+{% else %}
+<table class="res">
+<thead><tr><th>Adresse</th><th>Status</th><th></th></tr></thead>
+<tbody>
+{% for b in boxes %}
+<tr class="{{ 'missing' if b.state == 'missing' else '' }}">
+  <td>{{ b.ref_name }}</td>
+  <td>{% if b.state == 'missing' %}<span class="badge warn">im Panel nicht mehr vorhanden</span>{% else %}<span class="badge on">aktiv</span>{% endif %}</td>
+  <td class="actions">
+    {% if b.state != 'missing' %}
+    <form method="post" action="{{ url_for('mail_box_password', assignment_id=b.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="password" name="password" placeholder="neues Passwort" required minlength="8">
+      <button type="submit">Passwort ändern</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('mail_box_delete', assignment_id=b.id) }}" data-confirm="Postfach „{{ b.ref_name }}“ wirklich löschen?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="danger">Löschen</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% endblock %}

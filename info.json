@@ -1,0 +1,9 @@
+{
+  "title": "Kundenverwaltung",
+  "name": "customer_mgr",
+  "ps": "Kunden anlegen und bestehende Websites, Mail-Domains und Postfächer zuordnen",
+  "versions": "1.0.0",
+  "checks": "/www/server/panel/plugin/customer_mgr",
+  "author": "Mario",
+  "home": "https://neuhauser.cloud"
+}
