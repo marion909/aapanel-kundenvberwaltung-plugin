@@ -88,6 +88,48 @@ Es gibt keine „Passwort vergessen"-Funktion (keine SMTP-Infrastruktur) – ein
 neues Passwort setzt ausschließlich der Admin (über das weiterhin
 Python-basierte Admin-Plugin).
 
+## Websites im Portal (Anlegen, Konfiguration, Dateimanager)
+
+Kunden können im Portal unter **Websites**:
+
+- innerhalb ihrer **Domain-Bereiche** neue Websites und Subdomains anlegen
+  (z. B. `shop.kunde.at`, optional mit `www`-Alias und automatischem
+  Let's-Encrypt-Zertifikat) und wieder löschen (optional inkl. Dateien),
+- pro Website: starten/stoppen, PHP-Version, Standard-Dokumente,
+  Ausführungsverzeichnis (z. B. `/public`), weitere Domains/Subdomains als
+  Alias, SSL (ausstellen/erneuern, HTTPS erzwingen, deaktivieren),
+  Weiterleitungen, Rewrite-Vorlagen (nur geprüfte aaPanel-Vorlagen) und das
+  Zugriffslog,
+- im **Dateimanager** Dateien und ganze Ordner hochladen (Drag & Drop, in
+  4-MB-Stücken, große Dateien möglich), herunterladen, im Editor bearbeiten,
+  umbenennen, verschieben/kopieren, Rechte setzen, löschen, ZIP packen und
+  entpacken.
+
+Einrichtung im Admin-Plugin:
+
+1. Kunde → **Domain-Bereich** → z. B. `kunde.at` zuordnen. Darin (inkl. aller
+   Subdomains) darf der Kunde Websites anlegen. Bereiche verschiedener Kunden
+   dürfen sich nicht überschneiden.
+2. Einstellungen → **Websites im Kundenportal**: Pfad-Vorlage für neue
+   Websites (z. B. `/www/wwwroot/{customer_no}/{host}`), Website-Limit,
+   maximale Upload-Größe, optional Cloudflare-Zugang + Server-IP, damit
+   DNS-Einträge für neue (Sub-)Domains automatisch angelegt werden.
+
+Technische Hinweise:
+
+- Alle Website-Aktionen laufen über die aaPanel-API (dieselben Aktionen wie im
+  Panel: `AddSite`, `DeleteSite`, `AddDomain`, `SetPHPVersion`, `GetSSL`,
+  `CreateRedirect`, `acme/apply_cert_api`, …). Es wird zuerst `/v2/<modul>`,
+  dann `/<modul>` versucht (Einstellung „API-Präfixe“).
+- Der Dateimanager arbeitet direkt auf dem Dateisystem und ist strikt auf das
+  Verzeichnis der jeweiligen Website beschränkt (auch Symlinks nach außen und
+  `../`-Pfade in ZIP-Archiven werden abgewiesen). Damit neue Dateien dem
+  Besitzer des Website-Verzeichnisses gehören (`www` bzw. der aaPanel-Benutzer),
+  muss der Portal-Prozess als **root** laufen (Standard im Node.js-Projektmanager).
+- Reverse-Proxy der Portal-Domain: `client_max_body_size` muss mindestens
+  `8m` sein (Upload-Stücke sind 4 MB), und das Proxy-Timeout sollte ≥ 120 s
+  betragen, weil das Ausstellen eines Let's-Encrypt-Zertifikats dauern kann.
+
 ## Tests
 
 ```bash

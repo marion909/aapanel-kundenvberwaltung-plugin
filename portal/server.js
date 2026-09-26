@@ -74,7 +74,8 @@ app.set('views', path.join(__dirname, 'views'));
 app.locals.fmttime = fmttime;
 
 app.use('/static', express.static(path.join(__dirname, 'static')));
-app.use(express.urlencoded({ extended: false }));
+// 3 MB: der Datei-Editor schickt Dateien bis 2 MB als Formularfeld
+app.use(express.urlencoded({ extended: false, limit: '3mb' }));
 app.use(
   cookieSession({
     name: 'cm_portal_session',
@@ -107,7 +108,8 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (req.method === 'POST') {
     const token = req.session.csrf;
-    const sent = req.body.csrf_token || '';
+    // Formulare schicken das Token als Feld, der Datei-Upload (Rohdaten) als Header
+    const sent = (req.body && req.body.csrf_token) || req.get('x-csrf-token') || '';
     const tokenBuf = Buffer.from(String(token || ''));
     const sentBuf = Buffer.from(String(sent || ''));
     if (!token || !sent || tokenBuf.length !== sentBuf.length || !crypto.timingSafeEqual(tokenBuf, sentBuf)) {
@@ -199,59 +201,14 @@ app.get(
   loginRequired,
   asyncHandler(async (req, res) => {
     const asg = req.store.assignments(req.customer.id);
-    const counts = { site: 0, mail_domain: 0, mailbox: 0 };
+    const counts = { site: 0, mail_domain: 0, mailbox: 0, domain: 0 };
     for (const a of asg) counts[a.type] = (counts[a.type] || 0) + 1;
     res.render('dashboard', { title: 'Übersicht', counts });
   })
 );
 
-// ---------- Websites ----------
-app.get(
-  '/sites',
-  loginRequired,
-  asyncHandler(async (req, res) => {
-    const cfg = store.loadCfg();
-    const asg = req.store.assignments(req.customer.id).filter((a) => a.type === 'site');
-    resources.annotateAssignments(asg, await liveIndex(cfg));
-    res.render('sites', { title: 'Websites', sites: asg });
-  })
-);
-
-app.post(
-  '/sites/:id/start',
-  loginRequired,
-  asyncHandler(async (req, res) => {
-    const row = ownedAssignment(req, Number(req.params.id), 'site');
-    const cfg = store.loadCfg();
-    const api = resources.makeApi(cfg);
-    try {
-      await api.siteStart(row.ref_id, row.ref_name);
-      flash(req, `Website „${row.ref_name}“ wurde gestartet.`);
-    } catch (e) {
-      flash(req, e.message, 'error');
-    }
-    cache.invalidate();
-    res.redirect('/sites');
-  })
-);
-
-app.post(
-  '/sites/:id/stop',
-  loginRequired,
-  asyncHandler(async (req, res) => {
-    const row = ownedAssignment(req, Number(req.params.id), 'site');
-    const cfg = store.loadCfg();
-    const api = resources.makeApi(cfg);
-    try {
-      await api.siteStop(row.ref_id, row.ref_name);
-      flash(req, `Website „${row.ref_name}“ wurde gestoppt.`);
-    } catch (e) {
-      flash(req, e.message, 'error');
-    }
-    cache.invalidate();
-    res.redirect('/sites');
-  })
-);
+// ---------- Websites (Liste, Anlegen, Konfiguration, Dateimanager) ----------
+require('./routes/sites')(app, { loginRequired, ownedAssignment, asyncHandler, flash, cache, HttpError });
 
 // ---------- Mail ----------
 app.get(

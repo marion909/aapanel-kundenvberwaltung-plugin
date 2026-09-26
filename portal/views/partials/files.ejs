@@ -1,0 +1,82 @@
+<%
+  var cur = listing.path;
+  var crumbs = cur.split('/').filter(Boolean);
+  var base = '/sites/' + row.id + '/files';
+  var join = function (name) { return (cur === '/' ? '' : cur) + '/' + name; };
+  var fmtSize = function (n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(2) + ' GB';
+  };
+%>
+<section class="box fm" id="fm"
+  data-upload-url="/sites/<%= row.id %>/files/upload"
+  data-dir="<%= cur %>"
+  data-csrf="<%= csrfToken %>"
+  data-max-mb="<%= maxUploadMb %>">
+
+  <div class="crumbs">
+    <a href="<%= base %>?path=%2F">Website-Verzeichnis</a>
+    <% crumbs.forEach(function (c, i) { var p = '/' + crumbs.slice(0, i + 1).join('/'); %>
+      <span>/</span><a href="<%= base %>?path=<%= encodeURIComponent(p) %>"><%= c %></a>
+    <% }) %>
+  </div>
+
+  <form method="post" action="/sites/<%= row.id %>/files/op" id="fm-form">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <input type="hidden" name="dir" value="<%= cur %>">
+    <input type="hidden" name="arg" value="">
+    <input type="hidden" name="target" value="">
+    <input type="hidden" name="overwrite" value="">
+
+    <div class="fm-toolbar">
+      <label class="btn primary file-btn">Dateien hochladen<input type="file" multiple id="fm-upload" hidden></label>
+      <label class="btn file-btn">Ordner hochladen<input type="file" webkitdirectory directory multiple id="fm-upload-dir" hidden></label>
+      <button type="submit" name="op" value="mkdir" data-prompt="Name des neuen Ordners">Neuer Ordner</button>
+      <button type="submit" name="op" value="touch" data-prompt="Name der neuen Datei" data-default="index.html">Neue Datei</button>
+      <span class="sep"></span>
+      <button type="submit" name="op" value="move" data-need-selection data-prompt="Zielordner (relativ zur Website)" data-default="<%= cur %>">Verschieben</button>
+      <button type="submit" name="op" value="copy" data-need-selection data-prompt="Zielordner (relativ zur Website)" data-default="<%= cur %>">Kopieren</button>
+      <button type="submit" name="op" value="compress" data-need-selection data-prompt="Name des ZIP-Archivs" data-default="archiv.zip">Als ZIP packen</button>
+      <button type="submit" name="op" value="chmod" data-need-selection data-prompt="Rechte (z. B. 644 für Dateien, 755 für Ordner)" data-default="644">Rechte</button>
+      <button type="submit" name="op" value="delete" class="danger" data-need-selection data-confirm-selection="Ausgewählte Einträge wirklich löschen?">Löschen</button>
+    </div>
+
+    <div class="fm-drop" id="fm-drop">
+      <p class="hint drop-hint">Dateien oder Ordner hierher ziehen, um sie hochzuladen (max. <%= maxUploadMb %> MB pro Datei). ZIP-Archive lassen sich danach direkt entpacken.</p>
+      <div id="fm-uploads" class="uploads"></div>
+      <table class="res files">
+        <thead><tr><th class="cb"><input type="checkbox" id="fm-all" aria-label="Alle auswählen"></th><th>Name</th><th class="num">Größe</th><th>Geändert</th><th>Rechte</th><th></th></tr></thead>
+        <tbody>
+        <% if (cur !== '/') { %>
+          <tr><td></td><td colspan="5"><a href="<%= base %>?path=<%= encodeURIComponent('/' + crumbs.slice(0, -1).join('/')) %>">⬑ Übergeordneter Ordner</a></td></tr>
+        <% } %>
+        <% if (!listing.entries.length) { %>
+          <tr><td></td><td colspan="5" class="empty">Ordner ist leer.</td></tr>
+        <% } %>
+        <% listing.entries.forEach(function (e) { var p = join(e.name); %>
+          <tr>
+            <td class="cb"><% if (!e.protected) { %><input type="checkbox" name="paths" value="<%= p %>"><% } %></td>
+            <td class="name">
+              <% if (e.dir) { %>📁 <a href="<%= base %>?path=<%= encodeURIComponent(p) %>"><%= e.name %></a>
+              <% } else if (e.editable) { %>📄 <a href="<%= base %>/edit?path=<%= encodeURIComponent(p) %>"><%= e.name %></a>
+              <% } else { %>📄 <%= e.name %><% } %>
+              <% if (e.link) { %><span class="badge off">Link</span><% } %>
+              <% if (e.protected) { %><span class="badge off">geschützt</span><% } %>
+            </td>
+            <td class="num"><%= e.dir ? '' : fmtSize(e.size) %></td>
+            <td><%= fmttime(e.mtime) %></td>
+            <td class="mono"><%= e.mode %></td>
+            <td class="actions">
+              <% if (!e.dir) { %><a class="btn small" href="<%= base %>/download?path=<%= encodeURIComponent(p) %>">Download</a><% } %>
+              <% if (e.zip) { %><button type="submit" class="small" name="op" value="extract" data-target="<%= p %>" data-confirm-extract>Entpacken</button><% } %>
+              <% if (!e.protected) { %><button type="submit" class="small" name="op" value="rename" data-target="<%= p %>" data-prompt="Neuer Name" data-default="<%= e.name %>">Umbenennen</button><% } %>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </form>
+</section>

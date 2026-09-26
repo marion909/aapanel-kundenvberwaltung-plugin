@@ -1,0 +1,215 @@
+<%- include('partials/header') %>
+<p class="crumb"><a href="/sites">← Websites</a></p>
+<div class="head-row">
+  <h1><%= site.name %></h1>
+  <% if (site.status === '0') { %><span class="badge off">gestoppt</span><% } else { %><span class="badge on">läuft</span><% } %>
+</div>
+<p class="hint mono"><%= site.path %></p>
+
+<nav class="tabs">
+  <% [['overview','Übersicht'],['domains','Domains'],['ssl','SSL'],['redirects','Weiterleitungen'],['rewrite','Rewrite'],['files','Dateimanager'],['logs','Logs'],['delete','Löschen']].forEach(function (t) { %>
+  <a href="/sites/<%= row.id %>/<%= t[0] %>" class="<%= tab === t[0] ? 'on' : '' %>"><%= t[1] %></a>
+  <% }) %>
+</nav>
+
+<% if (typeof error !== 'undefined' && error) { %>
+<ul class="flash"><li class="error"><%= error %></li></ul>
+<% } else if (tab === 'overview') { %>
+<section class="box">
+  <h2>Status</h2>
+  <form method="post" action="/sites/<%= row.id %>/<%= site.status === '0' ? 'start' : 'stop' %>" class="inline" <% if (site.status !== '0') { %>data-confirm="Website wirklich stoppen? Besucher sehen dann eine Hinweisseite."<% } %>>
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <% if (site.status === '0') { %><button type="submit" class="primary">Website starten</button><% } else { %><button type="submit" class="danger">Website stoppen</button><% } %>
+  </form>
+</section>
+
+<section class="box">
+  <h2>PHP-Version</h2>
+  <form method="post" action="/sites/<%= row.id %>/php" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <select name="version">
+      <% overview.php_versions.forEach(function (v) { %>
+      <option value="<%= v.version %>" <%= v.version === overview.php_version ? 'selected' : '' %>><%= v.version === '00' ? 'Statisch (kein PHP)' : v.name %></option>
+      <% }) %>
+    </select>
+    <button type="submit">Speichern</button>
+  </form>
+</section>
+
+<section class="box">
+  <h2>Standard-Dokumente</h2>
+  <form method="post" action="/sites/<%= row.id %>/index" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <input type="text" name="index" value="<%= overview.index %>" class="wide" required>
+    <button type="submit">Speichern</button>
+  </form>
+  <p class="hint">Reihenfolge, in der Startdateien gesucht werden, durch Komma getrennt.</p>
+</section>
+
+<section class="box">
+  <h2>Ausführungsverzeichnis</h2>
+  <form method="post" action="/sites/<%= row.id %>/runpath" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <select name="run_path">
+      <% (overview.run_dirs.length ? overview.run_dirs : ['/']).forEach(function (d) { %>
+      <option value="<%= d %>" <%= d === overview.run_path ? 'selected' : '' %>><%= d %></option>
+      <% }) %>
+    </select>
+    <button type="submit">Speichern</button>
+  </form>
+  <p class="hint">Unterordner, der als Web-Root dient – z. B. <code>/public</code> für Laravel.</p>
+</section>
+
+<% } else if (tab === 'domains') { %>
+<section class="box">
+  <h2>Domains dieser Website</h2>
+  <table class="res">
+    <tbody>
+    <% domains.forEach(function (d) { %>
+      <tr><td><a href="http://<%= d.name %>" target="_blank" rel="noopener noreferrer"><%= d.name %></a></td><td><%= d.port %></td>
+      <td class="actions">
+        <% if (d.name !== site.name && domains.length > 1) { %>
+        <form method="post" action="/sites/<%= row.id %>/domains/remove" data-confirm="Domain „<%= d.name %>“ von der Website entfernen?">
+          <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+          <input type="hidden" name="host" value="<%= d.name %>">
+          <button type="submit" class="danger">Entfernen</button>
+        </form>
+        <% } else { %><span class="hint">Hauptdomain</span><% } %>
+      </td></tr>
+    <% }) %>
+    </tbody>
+  </table>
+</section>
+<section class="box">
+  <h2>Domain oder Subdomain hinzufügen</h2>
+  <% if (!areas.length) { %>
+  <p class="empty">Dir ist kein Domain-Bereich zugeordnet.</p>
+  <% } else { %>
+  <form method="post" action="/sites/<%= row.id %>/domains/add" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <input type="text" name="subdomain" placeholder="Subdomain, z. B. www" autocomplete="off">
+    <span>.</span>
+    <select name="domain"><% areas.forEach(function (d) { %><option value="<%= d %>"><%= d %></option><% }) %></select>
+    <button type="submit" class="primary">Hinzufügen</button>
+  </form>
+  <p class="hint">Die Domain zeigt danach ebenfalls auf diese Website. Für eine eigenständige Website mit eigenem Verzeichnis stattdessen unter <a href="/sites">Websites</a> eine neue anlegen.</p>
+  <% } %>
+</section>
+
+<% } else if (tab === 'ssl') { %>
+<section class="box">
+  <h2>Zertifikat</h2>
+  <% if (ssl.enabled) { %>
+  <dl class="facts">
+    <dt>Aussteller</dt><dd><%= ssl.issuer || '–' %></dd>
+    <dt>Gültig bis</dt><dd><%= ssl.not_after || '–' %><% if (ssl.days_left !== undefined && ssl.days_left !== null) { %> (noch <%= ssl.days_left %> Tage)<% } %></dd>
+    <dt>Gilt für</dt><dd><%= (ssl.dns || []).join(', ') || '–' %></dd>
+  </dl>
+  <% } else { %>
+  <p class="empty">Für diese Website ist kein Zertifikat aktiv.</p>
+  <% } %>
+  <form method="post" action="/sites/<%= row.id %>/ssl/letsencrypt" class="inline" data-busy="Zertifikat wird beantragt – das kann bis zu einer Minute dauern …">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <button type="submit" class="primary"><%= ssl.enabled ? "Let's-Encrypt-Zertifikat erneuern" : "Let's-Encrypt-Zertifikat ausstellen" %></button>
+  </form>
+  <p class="hint">Alle Domains der Website müssen per DNS auf diesen Server zeigen. Das Zertifikat wird automatisch verlängert.</p>
+</section>
+<% if (ssl.enabled) { %>
+<section class="box">
+  <h2>HTTPS erzwingen</h2>
+  <form method="post" action="/sites/<%= row.id %>/ssl/force" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <input type="hidden" name="enabled" value="<%= ssl.force_https ? '0' : '1' %>">
+    <span>Aktuell: <strong><%= ssl.force_https ? 'an' : 'aus' %></strong></span>
+    <button type="submit"><%= ssl.force_https ? 'Ausschalten' : 'Einschalten (http → https)' %></button>
+  </form>
+</section>
+<section class="box">
+  <h2>SSL deaktivieren</h2>
+  <form method="post" action="/sites/<%= row.id %>/ssl/disable" class="inline" data-confirm="SSL für diese Website wirklich deaktivieren?">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <button type="submit" class="danger">SSL deaktivieren</button>
+  </form>
+</section>
+<% } %>
+
+<% } else if (tab === 'redirects') { %>
+<section class="box">
+  <h2>Weiterleitungen</h2>
+  <% if (!redirects.length) { %><p class="empty">Keine Weiterleitungen.</p><% } else { %>
+  <table class="res">
+    <thead><tr><th>Von</th><th>Nach</th><th>Typ</th><th></th></tr></thead>
+    <tbody>
+    <% redirects.forEach(function (r) { %>
+      <tr><td class="mono"><%= r.kind === 'domain' ? (r.domains || []).join(', ') : r.path %></td><td class="mono"><%= r.to %></td>
+      <td><%= r.code %><%= r.holdpath ? ' · Pfad bleibt' : '' %><%= r.active ? '' : ' · inaktiv' %></td>
+      <td class="actions">
+        <form method="post" action="/sites/<%= row.id %>/redirects/delete" data-confirm="Weiterleitung löschen?">
+          <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+          <input type="hidden" name="name" value="<%= r.name %>">
+          <button type="submit" class="danger">Löschen</button>
+        </form>
+      </td></tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+<section class="box">
+  <h2>Neue Weiterleitung</h2>
+  <form method="post" action="/sites/<%= row.id %>/redirects/add" class="panel-form">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <label>Pfad <input type="text" name="path" placeholder="/alte-seite" required></label>
+    <label>Ziel-URL <input type="url" name="to" placeholder="https://www.example.com/neue-seite" required></label>
+    <label>Typ
+      <select name="code"><option value="301">301 – dauerhaft</option><option value="302">302 – vorübergehend</option></select>
+    </label>
+    <label class="check"><input type="checkbox" name="holdpath" value="1"> Restlichen Pfad anhängen</label>
+    <button type="submit" class="primary">Anlegen</button>
+  </form>
+</section>
+
+<% } else if (tab === 'rewrite') { %>
+<section class="box">
+  <h2>Rewrite-Regeln (URL-Umschreibung)</h2>
+  <% if (!rewrite.supported) { %>
+  <p class="empty">Dieser Server nutzt kein Nginx – bitte die <code>.htaccess</code> im Dateimanager bearbeiten.</p>
+  <% } else { %>
+  <form method="post" action="/sites/<%= row.id %>/rewrite" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <select name="template">
+      <option value="">– keine Regeln –</option>
+      <% rewrite.templates.forEach(function (t) { %><option value="<%= t %>"><%= t %></option><% }) %>
+    </select>
+    <button type="submit">Vorlage übernehmen</button>
+  </form>
+  <p class="hint">Aus Sicherheitsgründen sind nur geprüfte Vorlagen (z. B. <code>wordpress</code>, <code>laravel5</code>) wählbar.</p>
+  <h3>Aktuelle Regeln</h3>
+  <pre class="log"><%= rewrite.current || '(keine)' %></pre>
+  <% } %>
+</section>
+
+<% } else if (tab === 'files') { %>
+<%- include('partials/files') %>
+
+<% } else if (tab === 'logs') { %>
+<section class="box">
+  <h2>Zugriffslog (letzte Einträge)</h2>
+  <pre class="log"><%= log || '(leer)' %></pre>
+</section>
+
+<% } else if (tab === 'delete') { %>
+<section class="box danger-zone">
+  <h2>Website löschen</h2>
+  <p>Die Website <strong><%= site.name %></strong> wird aus aaPanel entfernt. Das kann nicht rückgängig gemacht werden.</p>
+  <form method="post" action="/sites/<%= row.id %>/delete" class="panel-form">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <label class="check"><input type="checkbox" name="delete_files" value="1"> Auch alle Dateien im Website-Verzeichnis löschen</label>
+    <label>Zur Bestätigung den Namen eingeben: <strong><%= site.name %></strong>
+      <input type="text" name="confirm" autocomplete="off" required>
+    </label>
+    <button type="submit" class="danger">Endgültig löschen</button>
+  </form>
+</section>
+<% } %>
+<%- include('partials/footer') %>

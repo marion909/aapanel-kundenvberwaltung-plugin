@@ -1,0 +1,124 @@
+name: Test & Release
+
+# Jeder Push auf main erzeugt automatisch ein GitHub-Release mit
+# customer_mgr-vX.Y.Z.zip. Versionslogik:
+#   - Basis ist "versions" aus info.json (z. B. 1.1.0).
+#   - Gibt es das Tag v<Basis> noch nicht, wird genau diese Version veröffentlicht.
+#   - Sonst wird die Patch-Nummer des höchsten vorhandenen Tags v<Major>.<Minor>.*
+#     um 1 erhöht (1.1.0 -> 1.1.1 -> 1.1.2 ...).
+#   Für einen Minor-/Major-Sprung einfach "versions" in info.json anheben.
+# Ein manuell gepushtes Tag vX.Y.Z wird ebenfalls als Release gebaut.
+# Pull Requests und andere Branches: nur Tests + ZIP als Build-Artefakt.
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*.*.*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python-Tests (Admin-Plugin)
+        run: python -m unittest discover -s tests -t . -v
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Node-Tests (Kundenportal)
+        working-directory: portal
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version bestimmen
+        id: version
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            BASE=$(python3 -c "import json; print(json.load(open('info.json'))['versions'])")
+            if ! [[ "$BASE" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "info.json 'versions' muss X.Y.Z sein, ist: $BASE" >&2; exit 1
+            fi
+            MM="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            if ! git rev-parse -q --verify "refs/tags/v${BASE}" >/dev/null; then
+              VERSION="$BASE"
+            else
+              LAST=$(git tag -l "v${MM}.*" | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k3,3n | tail -1)
+              VERSION="${MM}.$(( ${LAST##*.} + 1 ))"
+            fi
+            if [[ "${GITHUB_REF}" != "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+              # Vorschau-Build für Branches/PRs, kein Release
+              VERSION="${VERSION}-dev.${GITHUB_RUN_NUMBER}"
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: ZIP bauen
+        id: zip
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          # Build-Skript akzeptiert nur X.Y.Z; Vorschau-Builds werden danach umbenannt
+          ZIP=$(scripts/build_release.sh "${V%%-*}")
+          if [[ "$V" == *-* ]]; then
+            NEW="build/customer_mgr-v${V}.zip"
+            mv "$ZIP" "$NEW"
+            ZIP="$NEW"
+          fi
+          unzip -l "$ZIP" | tail -3
+          echo "path=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: customer_mgr-v${{ steps.version.outputs.version }}
+          path: ${{ steps.zip.outputs.path }}
+
+      - name: GitHub-Release erstellen
+        if: >-
+          github.event_name != 'pull_request' &&
+          (startsWith(github.ref, 'refs/tags/v') ||
+           github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" "${{ steps.zip.outputs.path }}" --clobber
+          else
+            gh release create "v$V" "${{ steps.zip.outputs.path }}" \
+              --target "$GITHUB_SHA" \
+              --title "Kundenverwaltung v$V" \
+              --generate-notes
+          fi

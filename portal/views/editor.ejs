@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<p class="crumb"><a href="/sites/<%= row.id %>/files?path=<%= encodeURIComponent(dir) %>">← Zurück zum Dateimanager</a></p>
+<h1 class="mono"><%= site.name %><%= file.path %></h1>
+<form method="post" action="/sites/<%= row.id %>/files/save" class="editor-form">
+  <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+  <input type="hidden" name="path" value="<%= file.path %>">
+  <input type="hidden" name="encoding" value="<%= file.encoding %>">
+  <input type="hidden" name="eol" value="<%= file.content.indexOf('\r\n') === -1 ? 'lf' : 'crlf' %>">
+  <textarea name="content" class="editor" spellcheck="false" wrap="off"><%= file.content %></textarea>
+  <div class="actions-row">
+    <button type="submit" class="primary">Speichern</button>
+    <span class="hint">Strg+S speichert ebenfalls. Kodierung: <%= file.encoding === 'utf8' ? 'UTF-8' : 'ISO-8859-1' %></span>
+  </div>
+</form>
+<%- include('partials/footer') %>

@@ -6,7 +6,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TYPE_LABEL = { site: 'Website', mail_domain: 'Mail-Domain', mailbox: 'Postfach' };
+  const TYPE_LABEL = { site: 'Website', mail_domain: 'Mail-Domain', mailbox: 'Postfach', domain: 'Domain-Bereich' };
 
   async function api(fun, params = {}) {
     const body = new URLSearchParams();
@@ -122,6 +122,7 @@
         </div>
         <div class="btns">
           <button type="button" class="primary" id="btn-assign">Ressourcen zuordnen</button>
+          <button type="button" id="btn-domain">Domain-Bereich</button>
           <button type="button" id="btn-edit">Bearbeiten</button>
         </div>
       </div>
@@ -134,6 +135,7 @@
     $$('.tabs button').forEach((b) => b.addEventListener('click', () => { state.tab = b.dataset.tab; renderDetail(); }));
     $('#btn-edit').addEventListener('click', () => openCustomerForm(c));
     $('#btn-assign').addEventListener('click', openAssign);
+    $('#btn-domain').addEventListener('click', openDomainDialog);
 
     const body = $('#tab-body');
     if (tab === 'resources') {
@@ -157,6 +159,7 @@
         ${f('E-Mail', c.email)}${f('Telefon', c.phone)}
         ${f('Adresse', [c.street, [c.zip, c.city].filter(Boolean).join(' '), c.country].filter(Boolean).join(', '))}
         ${f('UID-Nummer', c.vat_id)}${f('Kundennummer', c.customer_no)}
+        ${f('Max. Websites', c.max_sites === -1 || c.max_sites == null ? 'Standard' : (c.max_sites === 0 ? 'unbegrenzt' : c.max_sites))}
         ${f('Angelegt', c.created_at ? fmtTime(c.created_at) : '')}
         ${f('Notiz', c.note, 'wide')}
         </dl>
@@ -183,7 +186,7 @@
 
   // Eine Domain mit ihren Ressourcen, nach Art getrennt
   function domainCard(domain, items, mode, owners) {
-    const lanes = [['site', 'Web'], ['mail_domain', 'Mail'], ['mailbox', 'Postfächer']];
+    const lanes = [['domain', 'Bereich'], ['site', 'Web'], ['mail_domain', 'Mail'], ['mailbox', 'Postfächer']];
     const lanesHtml = lanes.map(([t, label]) => {
       const list = items.filter((i) => i.type === t);
       if (!list.length) return '';
@@ -273,6 +276,26 @@
     $('#detail').innerHTML = '<div class="empty"><p>Wähle links einen Kunden oder lege einen neuen an.</p></div>';
     loadCustomers();
   }
+
+  // ---------- Domain-Bereich ----------
+  function openDomainDialog() {
+    const f = $('#domain-form');
+    f.reset();
+    $('#df-err').textContent = '';
+    $('#dlg-domain').showModal();
+    f.elements.domain.focus();
+  }
+
+  $('#df-save').addEventListener('click', async () => {
+    const f = $('#domain-form');
+    try {
+      const r = await api('assign_domain', { payload: { customer_id: state.current, domain: f.elements.domain.value.trim() } });
+      $('#dlg-domain').close();
+      toast(r.msg);
+      state.tab = 'resources';
+      openCustomer(state.current, true);
+    } catch (e) { $('#df-err').textContent = e.message; }
+  });
 
   // ---------- Portal-Zugang ----------
   async function togglePortalAccess(c) {
@@ -451,8 +474,13 @@
       const s = r.data;
       const f = $('#settings-form');
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
-       'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix']
+       'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix',
+       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
+      ['site_default_max_sites', 'portal_max_upload_mb'].forEach((k) => { f.elements[k].value = s[k] == null ? '' : s[k]; });
+      f.elements.cf_proxied.checked = !!s.cf_proxied;
+      f.elements.cf_api_key.value = '';
+      $('#cf-key-hint').textContent = s.cf_api_key_set ? 'Hinterlegt. Nur ausfüllen, um ihn zu ändern.' : 'Kein Key hinterlegt – DNS-Einträge müssen dann manuell gesetzt werden.';
       $('#mailbox-methods-warn').innerHTML = s.mail_box_actions_configured ? '' :
         '<div class="warn">Ohne alle drei Aktionsnamen kann das Kundenportal keine Postfächer anlegen, Passwörter ändern oder löschen.</div>';
       f.elements.mail_db_fallback.checked = !!s.mail_db_fallback;
@@ -473,6 +501,7 @@
     const f = ev.target;
     const data = Object.fromEntries(new FormData(f).entries());
     data.mail_db_fallback = f.elements.mail_db_fallback.checked;
+    data.cf_proxied = f.elements.cf_proxied.checked;
     try { const r = await api('save_settings', { payload: data }); toast(r.msg); loadSettings(); }
     catch (e) { toast(e.message, true); }
   });
