@@ -124,6 +124,12 @@ function indexResources(res) {
 
 function annotateAssignments(assignments, idx) {
   for (const a of assignments) {
+    if (a.type === 'domain') {
+      // Domain-Bereiche sind keine Panel-Ressource - es gibt nichts abzugleichen
+      a.state = 'ok';
+      a.info = {};
+      continue;
+    }
     if (idx === null || idx === undefined) {
       a.state = 'unknown';
       a.info = {};

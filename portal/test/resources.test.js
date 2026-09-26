@@ -82,6 +82,14 @@ test('annotateAssignments markiert ok/missing/unknown korrekt', () => {
   assert.deepEqual(rows2[0].info, {});
 });
 
+test('annotateAssignments: Domain-Bereiche gelten nie als fehlend', () => {
+  for (const idx of [new Map(), null]) {
+    const rows = [{ type: 'domain', ref_name: 'kunde.at' }];
+    resources.annotateAssignments(rows, idx);
+    assert.equal(rows[0].state, 'ok');
+  }
+});
+
 test('ResourceCache respektiert TTL und refresh/invalidate', async () => {
   let calls = 0;
   const fakeLoad = async () => {
