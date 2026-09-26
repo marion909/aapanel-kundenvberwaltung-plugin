@@ -27,6 +27,15 @@ const DEFAULT_CFG = {
   mail_db_fallback: true,
   customer_prefix: 'K-',
   portal_secret_key: '',
+  site_api_prefixes: '/v2,',
+  site_path_template: '/www/wwwroot/{host}',
+  site_default_max_sites: 0,
+  portal_max_upload_mb: 512,
+  cf_email: '',
+  cf_api_key: '',
+  cf_proxied: false,
+  server_ipv4: '',
+  server_ipv6: '',
 };
 
 const PBKDF2_ITERATIONS = 600000; // muss mit cm_store.py übereinstimmen (Cross-Language-Hash-Kompatibilität)
@@ -66,6 +75,7 @@ CREATE TABLE IF NOT EXISTS customers (
   portal_password_hash TEXT NOT NULL DEFAULT '',
   portal_password_set_at INTEGER NOT NULL DEFAULT 0,
   portal_last_login INTEGER NOT NULL DEFAULT 0,
+  max_sites INTEGER NOT NULL DEFAULT -1,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -97,6 +107,7 @@ const MIGRATIONS = [
   ['customers', 'portal_password_hash', "TEXT NOT NULL DEFAULT ''"],
   ['customers', 'portal_password_set_at', "INTEGER NOT NULL DEFAULT 0"],
   ['customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"],
+  ['customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"],
 ];
 
 function columnExists(db, table, col) {
@@ -216,12 +227,25 @@ class Store {
     return this.db.prepare('SELECT * FROM assignments WHERE customer_id=? ORDER BY type, ref_name').all(cid);
   }
 
+  // Domain-Bereiche des Kunden (darin darf er Websites/Subdomains anlegen)
+  domains(cid) {
+    return this.db
+      .prepare("SELECT * FROM assignments WHERE customer_id=? AND type='domain' ORDER BY ref_name")
+      .all(cid);
+  }
+
+  siteAssignmentByName(cid, name) {
+    return this.db
+      .prepare("SELECT * FROM assignments WHERE customer_id=? AND type='site' AND ref_name=?")
+      .get(cid, String(name || '').toLowerCase()) || null;
+  }
+
   getAssignment(aid) {
     return this.db.prepare('SELECT * FROM assignments WHERE id=?').get(aid) || null;
   }
 
   assign(cid, items) {
-    const TYPES = ['site', 'mail_domain', 'mailbox'];
+    const TYPES = ['site', 'mail_domain', 'mailbox', 'domain'];
     if (!this.getCustomer(cid)) throw new Error('Kunde nicht gefunden');
     const now = Math.floor(Date.now() / 1000);
     const added = [];

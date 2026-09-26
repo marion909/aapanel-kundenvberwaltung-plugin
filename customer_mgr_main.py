@@ -15,7 +15,17 @@ import cm_store
 import cm_api
 import cm_resources
 
-VERSION = '1.0.0'
+
+def _read_version():
+    # Einzige Quelle der Versionsnummer: info.json (wird beim Release-Build gesetzt)
+    try:
+        with open(os.path.join(PLUGIN_DIR, 'info.json')) as f:
+            return str(json.load(f).get('versions') or '0.0.0')
+    except Exception:
+        return '0.0.0'
+
+
+VERSION = _read_version()
 _CACHE = cm_resources.ResourceCache()
 
 
@@ -177,7 +187,10 @@ class customer_mgr_main:
         valid, unknown = [], []
         for it in items:
             key = (it.get('type'), str(it.get('ref_name', '')).lower())
-            if key in live:
+            if key[0] == 'domain':
+                # Domain-Bereiche sind keine Panel-Ressourcen - nur Syntax prüfen
+                valid.append({'type': 'domain', 'ref_name': cm_store.normalize_domain(key[1])})
+            elif key in live:
                 ref_id = live[key].get('id', '') if key[0] == 'site' else ''
                 valid.append({'type': key[0], 'ref_name': key[1], 'ref_id': ref_id})
             else:
@@ -195,13 +208,25 @@ class customer_mgr_main:
         return _ok({'added': added, 'skipped': skipped, 'unknown': unknown}, msg)
 
     @endpoint
+    def assign_domain(self, args):
+        """Domain-Bereich zuordnen (Kunde darf darin Websites + Subdomains anlegen)."""
+        data = _payload(args)
+        cid = int(data.get('customer_id') or 0)
+        st = cm_store.Store()
+        try:
+            d = st.assign_domain(cid, data.get('domain'))
+        finally:
+            st.close()
+        return _ok({'domain': d}, 'Domain-Bereich {} zugeordnet'.format(d))
+
+    @endpoint
     def domain_bundle(self, args):
         """Alles zu einer Domain: Website(s), Mail-Domain, Mailboxen."""
         d = str(getattr(args, 'domain', '') or '').strip().lower()
         if not d:
             raise ValueError('Keine Domain angegeben')
         res = self._resources()
-        items = []
+        items = [{'type': 'domain', 'ref_name': d}]
         for s in res['sites']:
             if s['name'] == d or s['name'].endswith('.' + d):
                 items.append({'type': 'site', 'ref_name': s['name']})
@@ -235,6 +260,8 @@ class customer_mgr_main:
             st.close()
         out = []
         for a in rows:
+            if a['type'] == 'domain':
+                continue  # Domain-Bereiche existieren nicht als Panel-Ressource
             if (a['type'], a['ref_name']) not in live:
                 c = names.get(a['customer_id'], {})
                 a['customer_no'] = c.get('customer_no', '')
@@ -248,6 +275,8 @@ class customer_mgr_main:
         cfg = cm_store.load_cfg()
         key = cfg.pop('api_key', '')
         cfg.pop('portal_secret_key', None)
+        cf_key = cfg.pop('cf_api_key', '')
+        cfg['cf_api_key_set'] = bool(cf_key)
         cfg['api_key_set'] = bool(key)
         cfg['api_key_hint'] = ('…' + key[-4:]) if len(key) > 8 else ''
         cfg['detected_base_url'] = cm_api.detect_base_url()
@@ -265,13 +294,28 @@ class customer_mgr_main:
         for k in ('base_url', 'data_path', 'site_project_types', 'mail_plugin_paths',
                   'mail_domains_method', 'mail_boxes_method', 'customer_prefix',
                   'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method',
-                  'mail_box_default_quota'):
+                  'mail_box_default_quota', 'site_api_prefixes', 'site_path_template',
+                  'cf_email', 'server_ipv4', 'server_ipv6'):
             if k in data:
                 cfg[k] = str(data[k] or '').strip()
-        if 'mail_db_fallback' in data:
-            cfg['mail_db_fallback'] = bool(data['mail_db_fallback'])
+        for k in ('site_default_max_sites', 'portal_max_upload_mb'):
+            if k in data and str(data[k]).strip() != '':
+                try:
+                    cfg[k] = max(0, int(data[k]))
+                except (TypeError, ValueError):
+                    raise ValueError('{} muss eine Zahl sein'.format(k))
+        tpl = cfg.get('site_path_template') or ''
+        if '{host}' not in tpl or not tpl.startswith('/'):
+            raise ValueError('Pfad-Vorlage für Websites muss absolut sein und {host} enthalten')
+        for k in ('mail_db_fallback', 'cf_proxied'):
+            if k in data:
+                cfg[k] = bool(data[k])
         if data.get('api_key'):
             cfg['api_key'] = str(data['api_key']).strip()
+        if data.get('cf_api_key'):
+            cfg['cf_api_key'] = str(data['cf_api_key']).strip()
+        if data.get('cf_api_key_clear'):
+            cfg['cf_api_key'] = ''
         cm_store.save_cfg(cfg)
         _CACHE.invalidate()
         return _ok(None, 'Einstellungen gespeichert')

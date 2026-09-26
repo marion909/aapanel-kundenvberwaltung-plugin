@@ -78,6 +78,21 @@
       <div id="mailbox-methods-warn"></div>
       <label>Standard-Kontingent neuer Postfächer <input name="mail_box_default_quota" placeholder="1024 MB"><small>Format „Zahl Einheit", z. B. <code>1024 MB</code> oder <code>5 GB</code> – wird beim Anlegen und bei Passwortänderungen im Kundenportal mitgeschickt.</small></label>
 
+      <h2>Websites im Kundenportal</h2>
+      <p class="hint">Kunden können innerhalb ihrer zugeordneten <strong>Domain-Bereiche</strong> Websites und Subdomains selbst anlegen, konfigurieren (PHP, SSL, Weiterleitungen, Domains …) und Dateien hochladen.</p>
+      <label>Pfad-Vorlage für neue Websites <input name="site_path_template" placeholder="/www/wwwroot/{host}"><small>Platzhalter: <code>{host}</code> (Pflicht), <code>{domain}</code>, <code>{customer_no}</code> – z. B. <code>/www/wwwroot/{customer_no}/{host}</code></small></label>
+      <label>Standard: max. Websites pro Kunde <input name="site_default_max_sites" type="number" min="0"><small>0 = unbegrenzt. Pro Kunde in den Stammdaten überschreibbar.</small></label>
+      <label>Max. Dateigröße pro Upload (MB) <input name="portal_max_upload_mb" type="number" min="1"></label>
+      <label>API-Präfixe für Website-Aktionen <input name="site_api_prefixes"><small>Werden der Reihe nach versucht: <code>/v2,</code> = zuerst <code>/v2/site</code>, dann <code>/site</code>.</small></label>
+
+      <h3>Cloudflare (optional)</h3>
+      <p class="hint">Wenn hinterlegt, legt das Portal für neue Websites/Subdomains automatisch A/AAAA-Einträge in der passenden Cloudflare-Zone an. Der Key wird nur serverseitig verwendet.</p>
+      <label>Cloudflare-E-Mail <input name="cf_email" autocomplete="off"></label>
+      <label>Global API Key <input type="password" name="cf_api_key" placeholder="unverändert lassen" autocomplete="new-password"><small id="cf-key-hint"></small></label>
+      <label>Server-IPv4 <input name="server_ipv4" placeholder="z. B. 49.13.194.192"></label>
+      <label>Server-IPv6 <input name="server_ipv6" placeholder="optional"></label>
+      <label class="check"><input type="checkbox" name="cf_proxied"> Neue Einträge über Cloudflare proxien (orange Wolke)</label>
+
       <h2>Kunden</h2>
       <label>Präfix Kundennummer <input name="customer_prefix"></label>
 
@@ -115,6 +130,7 @@
       <label>Land <input name="country"></label>
       <label>UID-Nummer <input name="vat_id"></label>
       <label>Kundennummer <input name="customer_no" placeholder="automatisch"></label>
+      <label>Max. Websites <input name="max_sites" type="number" min="-1" placeholder="-1"><small>-1 = Standard aus Einstellungen, 0 = unbegrenzt</small></label>
       <label>Status
         <select name="status"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select>
       </label>
@@ -150,6 +166,19 @@
     <p class="form-err" id="pf-err"></p>
     <div class="actions">
       <button type="button" class="primary" id="pf-save">Setzen</button>
+      <button type="button" data-close>Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-domain">
+  <form method="dialog" id="domain-form">
+    <h2>Domain-Bereich zuordnen</h2>
+    <p class="hint">Der Kunde darf im Kundenportal innerhalb dieser Domain eigene Websites und beliebige Subdomains (z. B. <code>shop.kunde.at</code>) anlegen und verwalten.</p>
+    <label>Domain <input name="domain" placeholder="kunde.at" required></label>
+    <p class="form-err" id="df-err"></p>
+    <div class="actions">
+      <button type="button" class="primary" id="df-save">Zuordnen</button>
       <button type="button" data-close>Abbrechen</button>
     </div>
   </form>

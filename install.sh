@@ -48,10 +48,8 @@ install() {
   # Erstinstallation der Plugin-Dateien gedacht, das Portal-Deployment ist ein
   # separater, spaeterer Schritt (siehe portal/README.md).
   chmod -R 600 $PANEL/plugin/$PLUGIN
-  chmod 700 $PANEL/plugin/$PLUGIN \
-            $PANEL/plugin/$PLUGIN/templates $PANEL/plugin/$PLUGIN/static \
-            $PANEL/plugin/$PLUGIN/portal \
-            $PANEL/plugin/$PLUGIN/portal/views $PANEL/plugin/$PLUGIN/portal/static
+  # alle Ordner (auch portal/lib, portal/routes, portal/views/partials) wieder betretbar machen
+  find $PANEL/plugin/$PLUGIN -type d -exec chmod 700 {} +
   echo 'Successify'
   echo 'Hinweis: Kundenportal (portal/) muss separat ueber den Node.js-Projektmanager deployt werden, siehe portal/README.md'
 }

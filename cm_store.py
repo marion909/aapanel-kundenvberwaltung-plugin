@@ -1,7 +1,7 @@
 # coding: utf-8
 """SQLite-Speicher für Kunden und Zuordnungen.
 Liegt außerhalb des Plugin-Verzeichnisses, damit Updates/Neuinstallationen die Daten nicht löschen."""
-import base64, hashlib, hmac, json, os, sqlite3, time
+import base64, hashlib, hmac, json, os, re, sqlite3, time
 
 # CM_DATA_DIR erlaubt lokale Tests/Entwicklung außerhalb eines echten aaPanel-
 # Servers (der Standardpfad existiert z. B. auf macOS gar nicht). Im Produktiv-
@@ -25,6 +25,16 @@ DEFAULT_CFG = {
     'mail_db_fallback': True,             # nur lesend: /www/vmail/postfixadmin.db
     'customer_prefix': 'K-',
     'portal_secret_key': '',              # wird beim ersten Portal-Start automatisch erzeugt
+    # Websites im Kundenportal (Anlegen/Konfigurieren/Dateimanager)
+    'site_api_prefixes': '/v2,',          # Reihenfolge der API-Präfixe (/v2/site, /site); leer = klassisch
+    'site_path_template': '/www/wwwroot/{host}',  # Platzhalter: {host}, {domain}, {customer_no}
+    'site_default_max_sites': 0,          # 0 = unbegrenzt (pro Kunde überschreibbar)
+    'portal_max_upload_mb': 512,          # max. Dateigröße pro Upload im Dateimanager
+    'cf_email': '',                       # Cloudflare (optional): DNS-Einträge für neue (Sub-)Domains
+    'cf_api_key': '',                     # Global API Key - verlässt den Server nie
+    'cf_proxied': False,
+    'server_ipv4': '',
+    'server_ipv6': '',
 }
 
 PBKDF2_ITERATIONS = 600000  # aktuelle OWASP-Empfehlung für PBKDF2-SHA256
@@ -64,12 +74,13 @@ CREATE TABLE IF NOT EXISTS customers (
   portal_password_hash TEXT NOT NULL DEFAULT '',
   portal_password_set_at INTEGER NOT NULL DEFAULT 0,
   portal_last_login INTEGER NOT NULL DEFAULT 0,
+  max_sites INTEGER NOT NULL DEFAULT -1,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   customer_id INTEGER NOT NULL REFERENCES customers(id),
-  type TEXT NOT NULL,              -- site | mail_domain | mailbox
+  type TEXT NOT NULL,              -- site | mail_domain | mailbox | domain (Domain-Bereich fürs Portal)
   ref_name TEXT NOT NULL,          -- Domain bzw. Mailadresse
   ref_id TEXT DEFAULT '',          -- Panel-ID (Sites)
   created_at INTEGER,
@@ -97,6 +108,7 @@ _MIGRATIONS = (
     ('customers', 'portal_password_hash', "TEXT NOT NULL DEFAULT ''"),
     ('customers', 'portal_password_set_at', "INTEGER NOT NULL DEFAULT 0"),
     ('customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"),
+    ('customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"),
 )
 
 
@@ -113,7 +125,24 @@ def _migrate(db):
 
 CUSTOMER_FIELDS = ('company', 'first_name', 'last_name', 'email', 'phone', 'street',
                    'zip', 'city', 'country', 'vat_id', 'note', 'status')
-TYPES = ('site', 'mail_domain', 'mailbox')
+TYPES = ('site', 'mail_domain', 'mailbox', 'domain')
+
+_LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
+
+
+def normalize_domain(value):
+    """Kleinschreibung + IDNA + Syntaxprüfung für einen Domain-Bereich (z. B. kunde.at)."""
+    d = str(value or '').strip().lower().rstrip('.')
+    if d.startswith('*.'):
+        d = d[2:]
+    try:
+        d = d.encode('idna').decode('ascii')
+    except UnicodeError:
+        raise ValueError('Ungültige Domain: {}'.format(value))
+    labels = d.split('.')
+    if len(d) > 253 or len(labels) < 2 or not all(_LABEL_RE.match(x) for x in labels) or labels[-1].isdigit():
+        raise ValueError('Ungültige Domain: {}'.format(value))
+    return d
 _SECRET_FIELDS = ('portal_password_hash',)
 
 
@@ -207,6 +236,11 @@ class Store(object):
             vals['status'] = 'active'
         if not (vals['company'] or vals['last_name'] or vals['first_name']):
             raise ValueError('Firma oder Name ist erforderlich')
+        if 'max_sites' in data and str(data.get('max_sites')).strip() != '':
+            try:
+                vals['max_sites'] = max(-1, int(data.get('max_sites')))
+            except (TypeError, ValueError):
+                raise ValueError('Max. Websites muss eine Zahl sein (-1 = Standard, 0 = unbegrenzt)')
         no = str(data.get('customer_no', '') or '').strip()
         cid = data.get('id')
         if cid:
@@ -344,6 +378,18 @@ class Store(object):
             self.log('assign', cid, json.dumps(added, ensure_ascii=False))
         self.db.commit()
         return added, skipped
+
+    def assign_domain(self, cid, domain):
+        """Domain-Bereich zuordnen: der Kunde darf darin Websites und Subdomains anlegen."""
+        d = normalize_domain(domain)
+        for r in self.db.execute("SELECT customer_id, ref_name FROM assignments WHERE type='domain'"):
+            other = r['ref_name']
+            if r['customer_id'] != cid and (d == other or d.endswith('.' + other) or other.endswith('.' + d)):
+                raise ValueError('{} überschneidet sich mit dem Domain-Bereich {} eines anderen Kunden'.format(d, other))
+        added, skipped = self.assign(cid, [{'type': 'domain', 'ref_name': d}])
+        if not added:
+            raise ValueError('Domain-Bereich {} ist bereits zugeordnet'.format(d))
+        return d
 
     def unassign(self, aid):
         r = self.db.execute('SELECT * FROM assignments WHERE id=?', (aid,)).fetchone()

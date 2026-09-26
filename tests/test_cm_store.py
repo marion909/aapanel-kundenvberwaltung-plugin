@@ -107,6 +107,46 @@ class CmStoreTest(unittest.TestCase):
         self.assertEqual(by_login, 3)
         self.assertEqual(by_ip, 3)
 
+    def test_normalize_domain(self):
+        n = self.cm_store.normalize_domain
+        self.assertEqual(n(' Kunde.AT. '), 'kunde.at')
+        self.assertEqual(n('*.kunde.at'), 'kunde.at')
+        self.assertEqual(n('müller.at'), 'xn--mller-kva.at')
+        for bad in ('', 'localhost', 'a..at', '-a.at', '1.2.3.4', 'http://a.at'):
+            with self.assertRaises(ValueError):
+                n(bad)
+
+    def test_assign_domain_prevents_overlap_between_customers(self):
+        a = self._make_customer(company='A')
+        b = self._make_customer(company='B')
+        self.assertEqual(self.store.assign_domain(a, 'Kunde.at'), 'kunde.at')
+        self.assertTrue(self.store.is_assigned(a, 'domain', 'kunde.at'))
+        with self.assertRaises(ValueError):
+            self.store.assign_domain(b, 'shop.kunde.at')
+        with self.assertRaises(ValueError):
+            self.store.assign_domain(b, 'kunde.at')
+        # derselbe Kunde darf zusätzliche (auch überlappende) Bereiche bekommen
+        self.store.assign_domain(a, 'shop.kunde.at')
+        self.store.assign_domain(b, 'andere.at')
+
+    def test_max_sites_default_and_override(self):
+        cid = self._make_customer()
+        self.assertEqual(self.store.get_customer(cid)['max_sites'], -1)
+        self.store.save_customer({'id': cid, 'company': 'Test GmbH', 'max_sites': '3'})
+        self.assertEqual(self.store.get_customer(cid)['max_sites'], 3)
+        with self.assertRaises(ValueError):
+            self.store.save_customer({'id': cid, 'company': 'Test GmbH', 'max_sites': 'viele'})
+
+    def test_migration_adds_max_sites_to_existing_db(self):
+        self.store.close()
+        db = sqlite3.connect(self.cm_store.DB_FILE)
+        db.execute('ALTER TABLE customers DROP COLUMN max_sites')
+        db.commit()
+        db.close()
+        self.store = self.cm_store.Store()
+        cols = [r[1] for r in self.store.db.execute('PRAGMA table_info(customers)')]
+        self.assertIn('max_sites', cols)
+
 
 if __name__ == '__main__':
     unittest.main()
