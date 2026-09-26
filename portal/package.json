@@ -1,0 +1,17 @@
+{
+  "name": "customer-mgr-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Eigenständiges Kundenportal für das customer_mgr aaPanel-Plugin",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.0.0",
+    "ejs": "^3.1.10",
+    "better-sqlite3": "^11.3.0",
+    "cookie-session": "^2.1.0"
+  }
+}

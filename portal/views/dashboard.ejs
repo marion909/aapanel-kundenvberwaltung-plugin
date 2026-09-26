@@ -1,0 +1,11 @@
+<%- include('partials/header') %>
+<h1>Willkommen, <%= customer.company || customer.first_name %></h1>
+<div class="cards">
+  <a class="card" href="/sites"><strong><%= counts.site %></strong><span>Website(n)</span></a>
+  <a class="card" href="/mail"><strong><%= counts.mail_domain %></strong><span>Mail-Domain(s)</span></a>
+  <a class="card" href="/mail"><strong><%= counts.mailbox %></strong><span>Postfach/Postfächer</span></a>
+</div>
+<% if (customer.portal_last_login) { %>
+<p class="hint">Letzte Anmeldung: <%= fmttime(customer.portal_last_login) %></p>
+<% } %>
+<%- include('partials/footer') %>

@@ -1,9 +1,10 @@
 # coding: utf-8
-"""Gemeinsame Ressourcen-Fetch/Cache-Logik für Admin-Plugin und Kundenportal.
+"""Ressourcen-Fetch/Cache-Logik für das Admin-Plugin (customer_mgr_main.py).
 
-Beide Prozesse (customer_mgr_main.py im aaPanel-Kontext und portal/app.py als
-eigenständiger Flask-Prozess) importieren dieses Modul, damit die Panel-API-
-Abfrage- und Normalisierungslogik nicht doppelt gepflegt werden muss.
+Das Kundenportal (portal/) läuft als eigenständiger Node.js-Prozess und hat
+eine eigene, in JavaScript nachgebaute Entsprechung dieser Logik
+(portal/lib/resources.js) - Node kann dieses Python-Modul nicht importieren.
+Bei Änderungen an der Normalisierungs-/Fetch-Logik hier auch dort nachziehen.
 """
 import os, sqlite3, time
 

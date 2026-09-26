@@ -7,3 +7,5 @@ venv/
 *.db-journal
 config.json
 build/
+node_modules/
+npm-debug.log*

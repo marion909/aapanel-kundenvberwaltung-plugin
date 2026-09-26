@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= typeof title !== 'undefined' ? title + ' – Kundenportal' : 'Kundenportal' %></title>
+<link rel="stylesheet" href="/static/portal.css">
+</head>
+<body>
+<% if (typeof customer !== 'undefined' && customer) { %>
+<header class="top">
+  <span class="brand">Kundenportal</span>
+  <nav>
+    <a href="/">Übersicht</a>
+    <a href="/sites">Websites</a>
+    <a href="/mail">E-Mail</a>
+  </nav>
+  <form method="post" action="/logout" class="logout">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <span class="who"><%= customer.company || ((customer.first_name || '') + ' ' + (customer.last_name || '')) %></span>
+    <button type="submit">Abmelden</button>
+  </form>
+</header>
+<% } %>
+<main>
+  <% if (typeof flashes !== 'undefined' && flashes && flashes.length) { %>
+  <ul class="flash">
+    <% flashes.forEach(function (f) { %><li class="<%= f.type %>"><%= f.message %></li><% }) %>
+  </ul>
+  <% } %>

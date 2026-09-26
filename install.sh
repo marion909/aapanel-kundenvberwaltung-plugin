@@ -42,20 +42,25 @@ install() {
   [ -f "$MENU" ] && [ ! -f "$MENU.bak_before_$PLUGIN" ] && cp "$MENU" "$MENU.bak_before_$PLUGIN"
   menu_add
   find $PANEL/plugin/$PLUGIN -type d -name __pycache__ -exec rm -rf {} +
+  # Achtung: chmod -R hier NICHT erneut ausfuehren, nachdem im Portal-Ordner
+  # bereits "npm install" gelaufen ist - das wuerde node_modules/ (Binaries,
+  # .bin-Symlinks) die Ausfuehrbarkeit entziehen. install.sh ist nur fuer die
+  # Erstinstallation der Plugin-Dateien gedacht, das Portal-Deployment ist ein
+  # separater, spaeterer Schritt (siehe portal/README.md).
   chmod -R 600 $PANEL/plugin/$PLUGIN
   chmod 700 $PANEL/plugin/$PLUGIN \
             $PANEL/plugin/$PLUGIN/templates $PANEL/plugin/$PLUGIN/static \
             $PANEL/plugin/$PLUGIN/portal \
-            $PANEL/plugin/$PLUGIN/portal/templates $PANEL/plugin/$PLUGIN/portal/static
+            $PANEL/plugin/$PLUGIN/portal/views $PANEL/plugin/$PLUGIN/portal/static
   echo 'Successify'
-  echo 'Hinweis: Kundenportal (portal/) muss separat ueber den Python-Projektmanager deployt werden, siehe portal/README.md'
+  echo 'Hinweis: Kundenportal (portal/) muss separat ueber den Node.js-Projektmanager deployt werden, siehe portal/README.md'
 }
 
 uninstall() {
   menu_remove
   # Kundendaten bleiben bewusst erhalten: $DATA
   if [ -d "$PANEL/plugin/$PLUGIN/portal" ]; then
-    echo 'Hinweis: Falls der Python-Projektmanager auf plugin/'"$PLUGIN"'/portal zeigt, wird dessen Prozess durch das Loeschen jetzt funktionsunfaehig.'
+    echo 'Hinweis: Falls der Node.js-Projektmanager auf plugin/'"$PLUGIN"'/portal zeigt, wird dessen Prozess durch das Loeschen jetzt funktionsunfaehig.'
   fi
   rm -rf $PANEL/plugin/$PLUGIN
   echo 'Successify'

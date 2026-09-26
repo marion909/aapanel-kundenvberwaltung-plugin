@@ -1,10 +1,8 @@
-{% extends 'layout.html' %}
-{% block title %}Anmelden – Kundenportal{% endblock %}
-{% block content %}
+<%- include('partials/header') %>
 <div class="login-box">
   <h1>Kundenportal</h1>
   <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
     <label>Kundennummer
       <input type="text" name="login" required autofocus autocomplete="username">
     </label>
@@ -14,4 +12,4 @@
     <button type="submit" class="primary">Anmelden</button>
   </form>
 </div>
-{% endblock %}
+<%- include('partials/footer') %>
