@@ -70,6 +70,12 @@
       <label>Methode für Mailboxen <input name="mail_boxes_method"></label>
       <label class="check"><input type="checkbox" name="mail_db_fallback"> Wenn die Mail-API scheitert, Mailserver-Datenbank lesend verwenden</label>
 
+      <h2>Kundenportal</h2>
+      <p class="hint">Aktionsnamen für das Kundenportal (Postfach anlegen/Passwort ändern/löschen). Nicht öffentlich dokumentiert – über die Diagnose unten anhand der eigenen mail_sys-Version ermitteln. Deployment-Anleitung: <code>portal/README.md</code> im Plugin-Ordner.</p>
+      <label>Methode: Postfach anlegen <input name="mail_box_create_method"></label>
+      <label>Methode: Postfach-Passwort ändern <input name="mail_box_setpw_method"></label>
+      <label>Methode: Postfach löschen <input name="mail_box_delete_method"></label>
+
       <h2>Kunden</h2>
       <label>Präfix Kundennummer <input name="customer_prefix"></label>
 
@@ -132,6 +138,19 @@
       <button type="button" data-close>Abbrechen</button>
     </div>
   </div>
+</dialog>
+
+<dialog id="dlg-portal-password">
+  <form method="dialog" id="portal-password-form">
+    <h2>Portal-Passwort setzen</h2>
+    <p class="hint">Das neue Passwort wird nur als Hash gespeichert – hier notieren und dem Kunden mitteilen, es lässt sich danach nicht mehr anzeigen.</p>
+    <label>Neues Passwort <input type="text" name="password" minlength="8" required></label>
+    <p class="form-err" id="pf-err"></p>
+    <div class="actions">
+      <button type="button" class="primary" id="pf-save">Setzen</button>
+      <button type="button" data-close>Abbrechen</button>
+    </div>
+  </form>
 </dialog>
 
 <div id="toast" role="status" aria-live="polite"></div>

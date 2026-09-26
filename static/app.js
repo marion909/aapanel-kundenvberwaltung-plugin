@@ -160,8 +160,17 @@
         ${f('Angelegt', c.created_at ? fmtTime(c.created_at) : '')}
         ${f('Notiz', c.note, 'wide')}
         </dl>
-        <div class="actions"><button type="button" class="danger" id="btn-del">Kunde löschen</button></div></div>`;
+        <div class="actions"><button type="button" class="danger" id="btn-del">Kunde löschen</button></div></div>
+        <div class="panel">
+        <h3>Kundenportal</h3>
+        <p class="hint">Zugang: <strong>${c.portal_enabled ? 'aktiv' : 'inaktiv'}</strong>${c.portal_last_login ? ' · letzte Anmeldung ' + fmtTime(c.portal_last_login) : ''}</p>
+        <div class="actions">
+          <button type="button" id="btn-portal-toggle">${c.portal_enabled ? 'Portal-Zugang deaktivieren' : 'Portal-Zugang aktivieren'}</button>
+          <button type="button" id="btn-portal-pw">Passwort setzen/zurücksetzen</button>
+        </div></div>`;
       $('#btn-del').addEventListener('click', () => deleteCustomer(c));
+      $('#btn-portal-toggle').addEventListener('click', () => togglePortalAccess(c));
+      $('#btn-portal-pw').addEventListener('click', () => openPortalPasswordDialog(c));
     } else {
       const labels = { customer_add: 'Angelegt', customer_edit: 'Bearbeitet', assign: 'Zugeordnet', unassign: 'Zuordnung gelöst', customer_delete: 'Gelöscht' };
       body.innerHTML = '<div class="panel">' + (log.length ? '<ul class="log">' + log.map((l) => {
@@ -263,6 +272,31 @@
     state.current = null;
     $('#detail').innerHTML = '<div class="empty"><p>Wähle links einen Kunden oder lege einen neuen an.</p></div>';
     loadCustomers();
+  }
+
+  // ---------- Portal-Zugang ----------
+  async function togglePortalAccess(c) {
+    try {
+      const r = await api('set_portal_access', { payload: { id: c.id, enabled: !c.portal_enabled } });
+      toast(r.msg);
+      openCustomer(state.current, true);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  function openPortalPasswordDialog(c) {
+    const f = $('#portal-password-form');
+    f.reset();
+    $('#pf-err').textContent = '';
+    $('#dlg-portal-password').showModal();
+    f.elements.password.focus();
+    $('#pf-save').onclick = async () => {
+      try {
+        const r = await api('set_portal_password', { payload: { id: c.id, password: f.elements.password.value } });
+        $('#dlg-portal-password').close();
+        toast(r.msg);
+        openCustomer(state.current, true);
+      } catch (e) { $('#pf-err').textContent = e.message; }
+    };
   }
 
   // ---------- Ressourcen laden ----------
@@ -416,7 +450,8 @@
       const r = await api('get_settings');
       const s = r.data;
       const f = $('#settings-form');
-      ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method', 'customer_prefix']
+      ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
+       'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'customer_prefix']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
       f.elements.mail_db_fallback.checked = !!s.mail_db_fallback;
       f.elements.api_key.value = '';
