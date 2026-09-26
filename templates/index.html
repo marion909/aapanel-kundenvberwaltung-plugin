@@ -16,6 +16,7 @@
       <button type="button" data-view="resources">Alle Ressourcen</button>
       <button type="button" data-view="orphans">Prüfung</button>
       <button type="button" data-view="settings">Einstellungen</button>
+      <button type="button" data-view="docs" class="docs-btn">Docs</button>
     </nav>
   </header>
 
@@ -111,6 +112,187 @@
       <button type="button" id="btn-raw">Aufrufen</button>
       <pre id="raw-out"></pre>
     </details>
+  </section>
+  <!-- Docs -->
+  <section class="view docs" id="view-docs" hidden>
+    <nav class="doc-toc" aria-label="Inhalt">
+      <strong>Inhalt</strong>
+      <a href="#doc-ueberblick">Überblick</a>
+      <a href="#doc-start">Erste Schritte</a>
+      <a href="#doc-kunden">Kunden &amp; Zuordnungen</a>
+      <a href="#doc-bereiche">Domain-Bereiche</a>
+      <a href="#doc-portal">Kundenportal: Funktionen</a>
+      <a href="#doc-hosting">Kundenportal hosten</a>
+      <a href="#doc-einstellungen">Einstellungen</a>
+      <a href="#doc-updates">Updates &amp; Releases</a>
+      <a href="#doc-daten">Daten &amp; Backup</a>
+      <a href="#doc-sicherheit">Sicherheit</a>
+      <a href="#doc-probleme">Fehlerbehebung</a>
+    </nav>
+
+    <article class="doc">
+      <h2 id="doc-ueberblick">Überblick</h2>
+      <p>Die Kundenverwaltung besteht aus zwei Teilen:</p>
+      <ul>
+        <li><strong>Admin-Plugin</strong> (diese Seite, nur für Admins im aaPanel): Kunden anlegen, Websites, Mail-Domains, Postfächer und Domain-Bereiche zuordnen, Portal-Zugänge vergeben, Einstellungen.</li>
+        <li><strong>Kundenportal</strong> (eigene Website mit eigenem Login für Kunden): Kunden verwalten dort ihre Websites (inkl. Subdomains, SSL, PHP, Weiterleitungen, Dateimanager mit Upload) und Postfächer selbst – jeweils nur das, was ihnen zugeordnet ist.</li>
+      </ul>
+      <p>Beide teilen sich die Datenbank und die Einstellungen im Ordner <code>/www/server/panel/data/customer_mgr/</code>. Alle Änderungen an Websites und Postfächern laufen über die aaPanel-API – das Portal hat keinen Zugang zum Panel-Login.</p>
+
+      <h2 id="doc-start">Erste Schritte</h2>
+      <ol>
+        <li><strong>aaPanel-API aktivieren:</strong> Panel → Einstellungen → API → aktivieren, <code>127.0.0.1</code> in die IP-Whitelist eintragen, API-Schlüssel kopieren.</li>
+        <li><strong>Einstellungen</strong> (Tab oben): API-Schlüssel einfügen, „Speichern“, dann „Verbindung testen“. Alle Punkte müssen grün sein.</li>
+        <li><strong>Mailserver-Aktionen</strong> eintragen (für Postfächer im Portal), bei mail_sys 8.24: <code>add_mailbox_v2</code>, <code>update_mailbox_v2</code>, <code>delete_mailbox</code>, Kontingent <code>1024 MB</code>.</li>
+        <li><strong>Websites im Kundenportal</strong> einstellen: Pfad-Vorlage, Website-Limit, Upload-Größe, optional Cloudflare.</li>
+        <li><strong>Kunden anlegen</strong>, Ressourcen und Domain-Bereich zuordnen, Portal-Zugang aktivieren.</li>
+        <li><strong>Kundenportal hosten</strong> – siehe <a href="#doc-hosting">Kundenportal hosten</a>.</li>
+      </ol>
+
+      <h2 id="doc-kunden">Kunden &amp; Zuordnungen</h2>
+      <ul>
+        <li><strong>Neuer Kunde:</strong> Firma oder Name ist Pflicht. Die Kundennummer (z. B. <code>K-00001</code>) wird automatisch vergeben und ist gleichzeitig der Login im Kundenportal.</li>
+        <li><strong>Ressourcen zuordnen:</strong> zeigt alle Websites, Mail-Domains und Postfächer aus aaPanel, die noch keinem Kunden gehören. Der Haken bei einer Domain wählt alles dazu auf einmal.</li>
+        <li><strong>Zuordnung lösen</strong> (× am Eintrag): Die Ressource bleibt in aaPanel unverändert, der Kunde sieht sie nur nicht mehr.</li>
+        <li><strong>Stammdaten → Kundenportal:</strong> Zugang aktivieren und Passwort setzen (mind. 8 Zeichen). Das Passwort wird nur als Hash gespeichert – bitte beim Setzen notieren und dem Kunden mitteilen. Ein „Passwort vergessen“ gibt es nicht; ein neues Passwort setzt der Admin.</li>
+        <li><strong>Max. Websites:</strong> <code>-1</code> = Standard aus den Einstellungen, <code>0</code> = unbegrenzt, sonst die Anzahl.</li>
+        <li><strong>Prüfung</strong> (Tab oben): listet Zuordnungen, deren Website/Postfach in aaPanel gelöscht wurde.</li>
+      </ul>
+
+      <h2 id="doc-bereiche">Domain-Bereiche</h2>
+      <p>Ein Domain-Bereich (Button „Domain-Bereich“ beim Kunden, z. B. <code>kunde.at</code>) erlaubt dem Kunden, im Portal <strong>selbst</strong> Websites für diese Domain und beliebige Subdomains (<code>shop.kunde.at</code>, <code>dev.shop.kunde.at</code> …) anzulegen und zusätzliche Domains/Subdomains an seine Websites zu hängen.</p>
+      <ul>
+        <li>Bereiche verschiedener Kunden dürfen sich nicht überschneiden (<code>kunde.at</code> und <code>shop.kunde.at</code> nicht bei zwei Kunden).</li>
+        <li>Ein Domain-Bereich ist keine aaPanel-Ressource – er legt selbst nichts an, er ist nur die Erlaubnis.</li>
+        <li>Bestehende Websites müssen trotzdem über „Ressourcen zuordnen“ zugewiesen werden, damit der Kunde sie verwalten kann.</li>
+        <li>Ohne Domain-Bereich kann der Kunde seine zugeordneten Websites verwalten, aber keine neuen anlegen.</li>
+      </ul>
+
+      <h2 id="doc-portal">Kundenportal: Funktionen</h2>
+      <ul>
+        <li><strong>Übersicht:</strong> heutige Anfragen, Anzahl Websites/Limit, Mail-Domains, Postfächer, Anfragen der letzten 30 Tage, Speicherplatz pro Website.</li>
+        <li><strong>Website:</strong> neue Website/Subdomain anlegen (PHP-Version, www-Alias, automatisches Let's-Encrypt-SSL), starten/stoppen, löschen (optional mit Dateien).</li>
+        <li><strong>Pro Website:</strong> PHP-Version, Standard-Dokumente, Ausführungsverzeichnis (z. B. <code>/public</code>), weitere Domains/Subdomains, SSL (ausstellen/erneuern, HTTPS erzwingen, deaktivieren), Weiterleitungen, Rewrite-Vorlagen (nur geprüfte aaPanel-Vorlagen wie <code>wordpress</code>), Zugriffslog.</li>
+        <li><strong>Dateimanager:</strong> Dateien und Ordner hochladen (auch Drag &amp; Drop, große Dateien in 4-MB-Stücken), herunterladen, im Editor bearbeiten, umbenennen, verschieben/kopieren, Rechte setzen, löschen, ZIP packen/entpacken. Der Kunde kommt dabei nie aus dem Verzeichnis seiner Website heraus.</li>
+        <li><strong>SSL:</strong> Übersicht aller Zertifikate mit Restlaufzeit.</li>
+        <li><strong>Mailserver:</strong> Postfächer anlegen, Passwort ändern, löschen (in zugeordneten Mail-Domains).</li>
+        <li><strong>Journal:</strong> Protokoll aller Aktionen des Kunden und der Admin-Zuordnungen.</li>
+        <li>Das Portal ist für Handys optimiert (Menü über ☰).</li>
+      </ul>
+      <p class="hint">Neue Websites bekommen per Cloudflare automatisch einen DNS-Eintrag, wenn in den Einstellungen Cloudflare hinterlegt ist. Sonst muss der DNS-Eintrag (A-Record auf die Server-IP) vorher existieren, damit Let's Encrypt klappt.</p>
+
+      <h2 id="doc-hosting">Kundenportal hosten</h2>
+      <p>Das Portal ist eine Node.js-App im Plugin-Ordner <code>/www/server/panel/plugin/customer_mgr/portal</code>. Sie läuft als eigener Prozess auf <code>127.0.0.1:8901</code> und wird über eine normale aaPanel-Website mit Reverse-Proxy und SSL veröffentlicht, z. B. <code>kunden.neuhauser.cloud</code>.</p>
+
+      <h3>1. Voraussetzungen</h3>
+      <ul>
+        <li>Node.js 18 oder neuer (App Store → „Node.js version manager“ bzw. Node-Projekt, Version 20 oder 22 empfohlen).</li>
+        <li>DNS-Eintrag für die Portal-Domain (A-Record auf die Server-IP).</li>
+      </ul>
+
+      <h3>2. Abhängigkeiten installieren</h3>
+      <p>Im aaPanel-Terminal:</p>
+      <pre>cd /www/server/panel/plugin/customer_mgr/portal
+npm ci</pre>
+      <p class="hint">Bricht das bei <code>better-sqlite3</code> ab, fehlen Compiler: <code>apt-get install -y build-essential python3-dev</code> und erneut <code>npm ci</code>.</p>
+      <p>Kurzer Test (in einem zweiten Terminal <code>curl -i http://127.0.0.1:8901/login</code> – es muss das Login-Formular kommen, danach mit Strg+C beenden):</p>
+      <pre>PORT=8901 node server.js</pre>
+
+      <h3>3a. Start über den Node-Projektmanager von aaPanel (empfohlen)</h3>
+      <ol>
+        <li>Website → <strong>Node-Projekt</strong> → „Node-Projekt hinzufügen“.</li>
+        <li>Projektverzeichnis: <code>/www/server/panel/plugin/customer_mgr/portal</code></li>
+        <li>Startbefehl/Startdatei: <code>server.js</code> (bzw. <code>npm start</code>), Port <code>8901</code>, Node-Version 20+.</li>
+        <li><strong>Ausführender Benutzer: root</strong> – nötig, damit das Portal die Kundendaten lesen und hochgeladene Dateien dem richtigen Website-Besitzer zuweisen kann.</li>
+        <li>Domain eintragen (z. B. <code>kunden.neuhauser.cloud</code>) – aaPanel legt dann den Reverse-Proxy automatisch an.</li>
+        <li>Beim Projekt bzw. der Website unter <strong>SSL</strong> ein Let's-Encrypt-Zertifikat ausstellen und „HTTPS erzwingen“ einschalten.</li>
+      </ol>
+
+      <h3>3b. Alternative: systemd-Dienst + Proxy-Website</h3>
+      <p>Datei <code>/etc/systemd/system/customer-portal.service</code>:</p>
+      <pre>[Unit]
+Description=Kundenportal (customer_mgr)
+After=network.target
+
+[Service]
+WorkingDirectory=/www/server/panel/plugin/customer_mgr/portal
+ExecStart=/usr/bin/env node server.js
+Environment=PORT=8901
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target</pre>
+      <pre>systemctl daemon-reload
+systemctl enable --now customer-portal
+systemctl status customer-portal</pre>
+      <p>Danach in aaPanel eine Website (statisch) für die Portal-Domain anlegen, unter <strong>Reverse-Proxy</strong> das Ziel <code>http://127.0.0.1:8901</code> eintragen und SSL ausstellen. Falls <code>node</code> nicht unter <code>/usr/bin/env node</code> gefunden wird, den vollen Pfad eintragen (<code>which node</code>).</p>
+
+      <h3>4. Nginx-Einstellungen der Portal-Website (wichtig)</h3>
+      <p>Website → Konfiguration: im <code>server</code>-Block bzw. im Proxy-Abschnitt sicherstellen:</p>
+      <pre>client_max_body_size 20m;          # Upload-Stücke sind 4 MB
+proxy_read_timeout 180s;           # Let's Encrypt kann dauern
+proxy_send_timeout 180s;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pre>
+      <p class="hint">Das Portal setzt sein Login-Cookie nur über HTTPS. Ohne <code>X-Forwarded-Proto</code> hält es die Verbindung für unverschlüsselt und der Login schlägt fehl.</p>
+
+      <h3>5. Absichern</h3>
+      <ul>
+        <li>Port <code>8901</code> <strong>nicht</strong> in der Firewall freigeben – das Portal lauscht nur auf 127.0.0.1 und ist nur über die HTTPS-Domain erreichbar.</li>
+        <li>Die Portal-Domain den Kunden mitteilen, Login = Kundennummer + Portal-Passwort.</li>
+      </ul>
+
+      <h2 id="doc-einstellungen">Einstellungen</h2>
+      <dl class="doc-dl">
+        <dt>API-Key</dt><dd>Schlüssel aus Panel → Einstellungen → API. Wird nur serverseitig verwendet.</dd>
+        <dt>Panel-Adresse</dt><dd>Leer lassen (automatisch <code>https://127.0.0.1:&lt;Panel-Port&gt;</code>). Nur ändern, wenn der Verbindungstest wegen Domain-Bindung scheitert – dann die Panel-Domain inkl. Port eintragen und die Server-IP in die API-Whitelist aufnehmen.</dd>
+        <dt>Daten-Endpunkt / Projekttypen</dt><dd>Standardwerte lassen. Zusätzliche Projekttypen braucht es nur, damit auch Node-/Python-/Proxy-Projekte zuordenbar sind.</dd>
+        <dt>Mailserver-Methoden</dt><dd>Aktionsnamen des mail_sys-Plugins (siehe Erste Schritte). Mit „API-Rohaufruf“ unten in den Einstellungen lassen sich Endpunkte testen.</dd>
+        <dt>Pfad-Vorlage für neue Websites</dt><dd>Wo das Portal neue Websites anlegt. Platzhalter: <code>{host}</code> (Pflicht), <code>{domain}</code>, <code>{customer_no}</code>. Beispiel: <code>/mnt/HC_Volume_101973258/wwwroot/{customer_no}/{host}</code>.</dd>
+        <dt>Max. Websites / Upload-Größe</dt><dd>Standard-Limit pro Kunde (0 = unbegrenzt) und maximale Dateigröße pro Upload im Dateimanager.</dd>
+        <dt>API-Präfixe</dt><dd><code>/v2,</code> = erst neue (<code>/v2/site</code>), dann klassische API (<code>/site</code>). Standard lassen.</dd>
+        <dt>Cloudflare</dt><dd>E-Mail + Global API Key + Server-IP: neue Websites/Subdomains bekommen automatisch A-/AAAA-Einträge; beim Löschen werden nur Einträge entfernt, die auf die eigene Server-IP zeigen. Leer lassen = DNS manuell.</dd>
+      </dl>
+
+      <h2 id="doc-updates">Updates &amp; Releases</h2>
+      <ol>
+        <li>Neue Versionen stehen auf GitHub unter <strong>Releases</strong> als <code>customer_mgr-vX.Y.Z.zip</code> bereit (werden bei jeder Änderung automatisch gebaut).</li>
+        <li>In aaPanel: App Store → Plugin importieren → ZIP hochladen. Kundendaten und Einstellungen bleiben erhalten.</li>
+        <li>Danach im Terminal: <code>cd /www/server/panel/plugin/customer_mgr/portal &amp;&amp; npm ci</code> und das Portal neu starten (Node-Projekt → Neustart bzw. <code>systemctl restart customer-portal</code>).</li>
+        <li>Zeigt das Admin-Plugin nach einem Update seltsame Fehler („has no attribute …“), einmal das Panel neu starten: <code>bt restart</code>.</li>
+      </ol>
+
+      <h2 id="doc-daten">Daten &amp; Backup</h2>
+      <ul>
+        <li>Datenbank: <code>/www/server/panel/data/customer_mgr/customer_mgr.db</code></li>
+        <li>Einstellungen inkl. API-Schlüssel: <code>/www/server/panel/data/customer_mgr/config.json</code></li>
+        <li>Diesen Ordner in die Server-Sicherung aufnehmen. Beim Deinstallieren des Plugins bleibt er erhalten (erst <code>bash install.sh purge</code> löscht ihn).</li>
+      </ul>
+
+      <h2 id="doc-sicherheit">Sicherheit</h2>
+      <ul>
+        <li>Jeder Portal-Zugriff wird auf Besitz geprüft: Kunden sehen und ändern nur zugeordnete Websites/Postfächer und legen nur innerhalb ihrer Domain-Bereiche an.</li>
+        <li>Der Dateimanager ist auf das Website-Verzeichnis beschränkt (auch Symlinks nach außen und manipulierte ZIP-Archive werden abgewiesen).</li>
+        <li>Rewrite-Regeln nur aus aaPanel-Vorlagen – freie Nginx-Konfiguration ist für Kunden gesperrt.</li>
+        <li>Login-Sperre nach wiederholten Fehlversuchen, CSRF-Schutz, Cookies nur über HTTPS. Private SSL-Schlüssel werden nie im Portal angezeigt.</li>
+        <li>API-Schlüssel und Cloudflare-Key werden nur serverseitig verwendet und nie an den Browser gegeben.</li>
+      </ul>
+
+      <h2 id="doc-probleme">Fehlerbehebung</h2>
+      <dl class="doc-dl">
+        <dt>Verbindungstest rot</dt><dd>API im Panel aktiv? <code>127.0.0.1</code> in der Whitelist? API-Key korrekt? Nach 20 Fehlversuchen sperrt aaPanel die IP für eine Stunde.</dd>
+        <dt>„… has no attribute …“ im Admin-Plugin</dt><dd>Alte Plugin-Dateien im Speicher – Panel neu starten: <code>bt restart</code>.</dd>
+        <dt>Portal: Login klappt nicht</dt><dd>Portal-Zugang beim Kunden aktiv und Passwort gesetzt? Wird das Portal über HTTPS aufgerufen und sendet der Proxy <code>X-Forwarded-Proto</code>? (siehe Hosting, Schritt 4)</dd>
+        <dt>Portal: „unable to open database file“</dt><dd>Das Portal läuft nicht als root – im Node-Projekt bzw. systemd-Dienst den Benutzer auf root stellen.</dd>
+        <dt>Upload bricht ab (413)</dt><dd><code>client_max_body_size</code> der Portal-Website zu klein – auf mindestens <code>20m</code> setzen.</dd>
+        <dt>SSL-Ausstellung scheitert</dt><dd>DNS zeigt noch nicht auf den Server, oder die Domain ist über Cloudflare proxied und blockiert <code>/.well-known/</code>. Kurz warten und im Portal unter SSL erneut versuchen; Proxy-Timeout ≥ 180 s.</dd>
+        <dt>Website anlegen scheitert</dt><dd>Fehlermeldung aus aaPanel wird im Portal angezeigt. Häufig: Domain existiert bereits als Website oder Alias, oder die Pfad-Vorlage zeigt auf einen nicht beschreibbaren Ort.</dd>
+        <dt>Menüpunkt „Kunden“ fehlt in der Seitenleiste</dt><dd>Die aaPanel-8-Oberfläche zeigt eigene Menüeinträge nicht an. Zugriff über App Store → Installiert → Kundenverwaltung oder Lesezeichen auf <code>/customer_mgr/index.html</code>.</dd>
+      </dl>
+    </article>
   </section>
 </div>
 

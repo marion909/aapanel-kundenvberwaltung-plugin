@@ -169,3 +169,25 @@ dialog h2{margin:0 0 14px;font-size:20px}
   .grid{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+
+/* ---------- Docs ---------- */
+.views button.docs-btn{border:1px solid var(--line)}
+.docs{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;align-items:start;max-width:1100px}
+.doc-toc{position:sticky;top:12px;display:flex;flex-direction:column;gap:2px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px 12px;font-size:13px}
+.doc-toc strong{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 6px 6px}
+.doc-toc a{color:var(--ink);text-decoration:none;padding:5px 6px;border-radius:4px}
+.doc-toc a:hover{background:var(--soft)}
+.doc{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:8px 30px 30px;line-height:1.6;font-size:14px;max-width:820px}
+.doc h2{font-size:20px;margin:30px 0 8px;padding-top:6px;scroll-margin-top:12px}
+.doc h2:first-child{margin-top:18px}
+.doc h3{font-size:15px;margin:20px 0 6px}
+.doc p,.doc ul,.doc ol{margin:6px 0 10px}
+.doc li{margin:3px 0}
+.doc code{background:var(--soft);border-radius:3px;padding:1px 5px;font-size:12.5px;word-break:break-word}
+.doc pre{background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;overflow-x:auto;font-size:12.5px;line-height:1.5;margin:8px 0 12px}
+.doc .hint{font-size:13px}
+.doc a{color:var(--green-ink)}
+.doc-dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 18px;margin:8px 0 12px}
+.doc-dl dt{font-weight:600}
+.doc-dl dd{margin:0}
+@media (max-width:860px){.docs{grid-template-columns:1fr}.doc-toc{position:static}.doc{padding:6px 18px 22px}.doc-dl{grid-template-columns:1fr}.doc-dl dd{margin-bottom:6px}}
