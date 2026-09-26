@@ -15,8 +15,11 @@
 %>
 <div class="shell">
   <aside class="side">
-    <a class="brand" href="/">Kunden<span>Portal</span></a>
-    <nav>
+    <div class="side-top">
+      <a class="brand" href="/">Kunden<span>Portal</span></a>
+      <button type="button" class="menu-toggle" aria-label="Menü" aria-expanded="false" aria-controls="side-nav"><%- icon('M4 7h16M4 12h16M4 17h16') %></button>
+    </div>
+    <nav id="side-nav">
       <a href="/" class="<%= on('/') %>"><%- icon('M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z') %>Übersicht</a>
       <a href="/sites" class="<%= p.indexOf('/sites') === 0 && p.indexOf('/files') === -1 ? 'on' : '' %>"><%- icon('M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 0c2.5 2.4 3.8 5.4 3.8 9s-1.3 6.6-3.8 9m0-18C9.5 5.4 8.2 8.4 8.2 12s1.3 6.6 3.8 9M3.5 9h17M3.5 15h17') %>Website</a>
       <a href="/files" class="<%= p === '/files' || /^\/sites\/\d+\/files/.test(p) ? 'on' : '' %>"><%- icon('M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z') %>Dateiverwaltung</a>
@@ -33,7 +36,7 @@
     <div class="topbar">
       <span class="user"><%- icon('M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0') %><%= customer.customer_no %></span>
       <span class="company"><%= customer.company || ((customer.first_name || '') + ' ' + (customer.last_name || '')) %></span>
-      <% if (typeof appVersion !== 'undefined') { %><span class="muted">Aktuelle Version: <%= appVersion %></span><% } %>
+      <% if (typeof appVersion !== 'undefined') { %><span class="muted version">Aktuelle Version: <%= appVersion %></span><% } %>
       <span class="grow"></span>
       <% if (customer.portal_last_login) { %><span class="muted">Letzte Anmeldung: <%= fmttime(customer.portal_last_login) %></span><% } %>
     </div>
