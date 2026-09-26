@@ -126,7 +126,9 @@ Technische Hinweise:
   `../`-Pfade in ZIP-Archiven werden abgewiesen). Damit neue Dateien dem
   Besitzer des Website-Verzeichnisses gehören (`www` bzw. der aaPanel-Benutzer),
   muss der Portal-Prozess als **root** laufen (Standard im Node.js-Projektmanager).
-- Reverse-Proxy der Portal-Domain: `client_max_body_size` muss mindestens
+- Reverse-Proxy der Portal-Domain: `proxy_set_header X-Forwarded-Proto $scheme;`
+  muss gesetzt sein (sonst setzt das Portal kein Login-Cookie), und
+  `client_max_body_size` muss mindestens
   `8m` sein (Upload-Stücke sind 4 MB), und das Proxy-Timeout sollte ≥ 120 s
   betragen, weil das Ausstellen eines Let's-Encrypt-Zertifikats dauern kann.
 
