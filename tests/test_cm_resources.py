@@ -75,6 +75,14 @@ class CmResourcesTest(unittest.TestCase):
         self.assertEqual(rows2[0]['state'], 'unknown')
         self.assertEqual(rows2[0]['info'], {})
 
+    def test_annotate_assignments_domain_area_is_never_missing(self):
+        rows = [{'type': 'domain', 'ref_name': 'kunde.at'}]
+        cm_resources.annotate_assignments(rows, {})
+        self.assertEqual(rows[0]['state'], 'ok')
+        rows = [{'type': 'domain', 'ref_name': 'kunde.at'}]
+        cm_resources.annotate_assignments(rows, None)
+        self.assertEqual(rows[0]['state'], 'ok')
+
     def test_resource_cache_respects_ttl_and_refresh(self):
         calls = {'n': 0}
 

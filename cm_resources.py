@@ -116,6 +116,11 @@ def annotate_assignments(assignments, idx):
     """Reichert Zuordnungen mit Live-Status ('ok'/'missing') und Panel-Infos an.
     idx=None bedeutet 'Live-Status nicht verfügbar' (z. B. API-Fehler)."""
     for a in assignments:
+        if a['type'] == 'domain':
+            # Domain-Bereiche sind keine Panel-Ressource - es gibt nichts abzugleichen
+            a['state'] = 'ok'
+            a['info'] = {}
+            continue
         if idx is None:
             a['state'] = 'unknown'
             a['info'] = {}
