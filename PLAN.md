@@ -1,6 +1,6 @@
 # Plan: aaPanel-Plugin „Kundenverwaltung“ mit Kundenportal
 
-Stand: 2026-09-26 · Status: Entwurf v2 (Anforderungen geklärt)
+Stand: 2026-09-26 · Status: Entwurf v3 (alle Anforderungen geklärt)
 
 ## 1. Ziel
 
@@ -12,7 +12,7 @@ selbst verwalten:
 
 - DNS-Einträge ihrer Domains (Cloudflare): anlegen, ändern, löschen
 - Webseiten anlegen, bearbeiten, löschen (PHP-Version, SSL, Weiterleitungen, …)
-- Postfächer anlegen, bearbeiten (Passwort, Quota, Weiterleitung), löschen
+- Postfächer anlegen, bearbeiten (Passwort, Weiterleitung), löschen
 - FTP-Zugänge und Datenbanken – nur wenn der Admin sie freigeschaltet hat
 
 ## 2. Rahmenbedingungen
@@ -20,7 +20,8 @@ selbst verwalten:
 | Thema | Entscheidung |
 |-------|--------------|
 | aaPanel-Edition | **Pro** |
-| DNS | **Cloudflare**, Verwaltung über die Cloudflare-Anbindung von aaPanel |
+| DNS | **Cloudflare**, Verwaltung über die Cloudflare-Anbindung von aaPanel, Zugang per **Global API Key** (E-Mail + Key, alle Rechte) |
+| Quota | **nur Anzahl-Limits, geprüft im Plugin** – keine Speicherplatz-Quota auf Dateisystem-/Datenbank-Ebene |
 | Mail | offizielles aaPanel-Plugin **Mail Server** |
 | Portal-Domain | **im Plugin einstellbar**; das Plugin legt vHost und SSL automatisch an |
 | Domains hinzufügen | **nur der Admin**; Kunden verwalten nur DNS-Einträge und Subdomains ihrer Domains |
@@ -48,7 +49,7 @@ selbst verwalten:
 │  Nginx-vHost <Portal-Domain aus Plugin-Einstellungen>    │
 │   └─ 443 + Let's Encrypt → reverse proxy 127.0.0.1:8850  │
 └────────────────────────┬─────────────────────────────────┘
-                         │ HTTPS (API-Token)
+                         │ HTTPS (Global API Key)
                  ┌───────▼────────┐
                  │ Cloudflare DNS │
                  └────────────────┘
@@ -65,20 +66,23 @@ aufruft.
 |-----------|--------------------------------------------------------------------|----------|
 | Webseiten | Panel-Klassen (`panelSite.panelSite().AddSite`, `DeleteSite`, `SiteStop/SiteStart`, PHP-Version, Redirects) | aaPanel-API (`/site?action=…` mit `request_token`) |
 | SSL       | Let's Encrypt über aaPanel-ACME, **bevorzugt DNS-01 via Cloudflare** (funktioniert auch bei aktivem Cloudflare-Proxy) | HTTP-01 |
-| DNS       | **Cloudflare-Konto aus der aaPanel-DNS-API-Konfiguration** (Domain-/DNS-Verwaltung in aaPanel) → Cloudflare API v4 | eigener API-Token in den Plugin-Einstellungen |
+| DNS       | **Cloudflare-Konto aus der aaPanel-DNS-API-Konfiguration** (Domain-/DNS-Verwaltung in aaPanel) → Cloudflare API v4, Header `X-Auth-Email` + `X-Auth-Key` | E-Mail + Global API Key in den Plugin-Einstellungen |
 | Mail      | Plugin **Mail Server** (`mail_sys_main`: `add_domain`, `add_mailbox`, `update_mailbox`, `delete_mailbox`, DKIM) | — |
 | FTP       | `ftp.ftp().AddUser / DeleteUser / SetUserPassword`                 | aaPanel-API |
 | Datenbank | `database.database().AddDatabase / DeleteDatabase / ResDatabasePassword` | aaPanel-API |
-| Disk-Quota| aaPanel-Pro-Quota für Site-Verzeichnisse (setzt **XFS mit prjquota** voraus) | Cron-Messung mit `du` (siehe 5) |
 
 Alle Adapter liegen hinter einem Interface (`SiteAdapter`, `DnsAdapter`, …). Die
 Methodensignaturen ändern sich zwischen aaPanel-Versionen, daher wird in Phase 0 eine
 Kompatibilitätsschicht (`adapters/compat.py`) gegen die installierte Version geschrieben.
 
 ### Cloudflare im Detail
-- Zugangsdaten: bevorzugt das in aaPanel hinterlegte Cloudflare-Konto wiederverwenden;
-  alternativ eigener **API-Token mit minimalen Rechten** (`Zone:Read`, `DNS:Edit`, nur
-  für die betroffenen Zonen), gespeichert verschlüsselt in der Plugin-DB.
+- Zugangsdaten: bevorzugt das in aaPanel hinterlegte Cloudflare-Konto (E-Mail + Global
+  API Key) wiederverwenden; alternativ in den Plugin-Einstellungen eintragen, dann
+  verschlüsselt in der Plugin-DB gespeichert.
+- Weil der Global API Key **alle Rechte** auf das ganze Cloudflare-Konto hat, darf er den
+  Server nie verlassen: nur der Root-Worker nutzt ihn, das Portal sieht ihn nie, und der
+  Cloudflare-Adapter erlaubt nur DNS-Record-Aktionen auf Zonen, die dem Kunden zugeordnet
+  sind (keine Konto-, Firewall- oder Zonen-Löschaktionen aus dem Portal).
 - Admin fügt Domain hinzu → Plugin prüft, ob die Zone in Cloudflare existiert, oder legt
   sie an (Anzeige der Cloudflare-Nameserver für den Registrar).
 - Zuordnung `domain ↔ zone_id` wird gespeichert; Kunden sehen nur ihre Zonen.
@@ -91,8 +95,8 @@ Kompatibilitätsschicht (`adapters/compat.py`) gegen die installierte Version ge
 
 | Tabelle          | Wichtige Felder |
 |------------------|-----------------|
-| `settings`       | portal_domain, portal_port, default_language, cloudflare_token (verschlüsselt), branding, smtp für Benachrichtigungen |
-| `packages`       | id, name, max_domains, max_sites, max_subdomains, max_mail_domains, max_mailboxes, mailbox_quota_mb_default, mailbox_quota_mb_total, web_disk_mb, **ftp_enabled, max_ftp_accounts, db_enabled, max_databases, db_disk_mb**, max_dns_records, ssl_allowed, php_versions |
+| `settings`       | portal_domain, portal_port, default_language, cloudflare_email, cloudflare_api_key (verschlüsselt), branding, smtp für Benachrichtigungen |
+| `packages`       | id, name, max_domains, max_sites, max_subdomains, max_mail_domains, max_mailboxes, mailbox_size_mb (Größe je Postfach), **ftp_enabled, max_ftp_accounts, db_enabled, max_databases**, max_dns_records, ssl_allowed, php_versions |
 | `customers`      | id, customer_no, company, first_name, last_name, email, phone, address, language (de/en), package_id, **feature_overrides_json** (FTP/DB pro Kunde ein-/ausschalten, Limits überschreiben), status (active/suspended/deleted), notes |
 | `portal_users`   | id, customer_id, username, email, password_hash (argon2id), totp_secret, language, last_login, failed_attempts, locked_until |
 | `domains`        | id, customer_id, domain, cloudflare_zone_id, created_at |
@@ -101,25 +105,26 @@ Kompatibilitätsschicht (`adapters/compat.py`) gegen die installierte Version ge
 | `mailboxes`      | id, customer_id, mail_domain_id, address, quota_mb, active |
 | `ftp_accounts`   | id, customer_id, site_id, aapanel_ftp_id, username |
 | `databases`      | id, customer_id, aapanel_db_id, name, db_user, type (MySQL) |
-| `usage_cache`    | customer_id, web_disk_mb, mail_disk_mb, db_disk_mb, updated_at |
 | `audit_log`      | id, actor, customer_id, action, object, payload_json, ip, created_at |
 | `sessions`       | id, portal_user_id, token_hash, csrf_token, expires_at, ip, user_agent |
 
 aaPanel und Cloudflare bleiben die „Wahrheit“; die Plugin-DB speichert Zuordnung und
 Paketdaten. Ein Sync-Job erkennt Abweichungen (z. B. im Panel manuell gelöschte Seiten).
 
-## 5. Quota-Pakete
+## 5. Quota-Pakete (nur Anzahl, im Plugin geprüft)
 
-- **Zählbare Limits** (Domains, Webseiten, Subdomains, Postfächer, FTP, DBs, DNS-Records)
-  werden vor jeder Anlage im Service-Layer geprüft.
+- Ein Paket legt **Anzahlen** fest: Domains, Webseiten, Subdomains, Mail-Domains,
+  Postfächer, FTP-Zugänge, Datenbanken, DNS-Records.
+- Vor jeder Anlage (Admin-Wizard **und** Portal) prüft der Service-Layer
+  `quota.check(customer, "<ressource>", +1)`; der Root-Worker prüft ein zweites Mal.
+  Gezählt wird aus der Plugin-DB, nicht aus Messungen.
 - **Funktionsfreigabe:** effektive Rechte = Paket + Kunden-Overrides. Ist FTP/DB nicht
   freigegeben, wird der Menüpunkt im Portal ausgeblendet **und** die API lehnt ab.
-- **Mail-Speicher:** Quota pro Postfach; Summe ≤ `mailbox_quota_mb_total`.
-- **Web-Speicher:** Pro-Quota von aaPanel, falls `/www` auf XFS mit `prjquota` liegt
-  (Installer prüft das und zeigt das Ergebnis an); sonst Cron-Messung → Warnung bei
-  90 %, keine Neuanlagen bei 100 %.
-- **DB-Speicher:** aaPanel-Pro-DB-Quota, sonst Messung über `information_schema`.
-- Paketwechsel: Upgrade sofort; Downgrade nur, wenn aktuelle Nutzung passt.
+- **Keine Speicherplatz-Quota** für Webseiten, Datenbanken oder Mail-Gesamtspeicher.
+  Einzige Größenangabe: die Postfach-Größe, die der Mail Server beim Anlegen ohnehin
+  verlangt (`mailbox_size_mb` aus dem Paket, fester Wert, vom Kunden nicht änderbar).
+- Paketwechsel: Upgrade sofort; Downgrade nur, wenn die aktuellen Anzahlen ins neue Paket passen.
+- Anzeige im Admin und Portal: „3 von 5 Postfächern“ usw.
 
 ## 6. Admin-Bereich im aaPanel-Plugin
 
@@ -131,18 +136,18 @@ Paketdaten. Ein Sync-Job erkennt Abweichungen (z. B. im Panel manuell gelöschte
 3. **Webseite** – Site anlegen (`/www/wwwroot/<kundennr>/<domain>`), PHP-Version,
    Let's Encrypt per DNS-01; optional direkt FTP-Zugang und Datenbank.
 4. **Mail-Domain** – im Mail Server anlegen, DKIM erzeugen und in Cloudflare eintragen.
-5. **Postfächer** – mit Quota anlegen; Zugangsdaten-Übersicht (PDF) für den Kunden.
+5. **Postfächer** – anlegen (Größe aus dem Paket); Zugangsdaten-Übersicht (PDF) für den Kunden.
 
 Schlägt ein Schritt fehl, bleiben die vorigen bestehen; der Wizard zeigt den Status und
 bietet „Erneut versuchen“. Alles landet im Audit-Log.
 
-**Weitere Ansichten:** Kundenliste, Kundendetail mit Verbrauch, Paketverwaltung,
+**Weitere Ansichten:** Kundenliste, Kundendetail mit Anzahl-Übersicht, Paketverwaltung,
 Kunde sperren/entsperren (Sites stoppen, Mail/FTP/Portal sperren), Kunde löschen (mit
 Backup-Option), „Als Kunde ansehen“ (geloggt), Domains nachträglich hinzufügen/entfernen.
 
 **Plugin-Einstellungen:** Portal-Domain (Speichern → Nginx-vHost + Reverse Proxy +
 Let's Encrypt werden angelegt bzw. umgestellt), Portal-Port, Cloudflare-Zugang
-(aaPanel-Konto oder eigener Token + „Verbindung testen“), Standardsprache, Branding
+(aaPanel-Konto oder eigene E-Mail + Global API Key, „Verbindung testen“), Standardsprache, Branding
 (Name, Logo, Farbe), SMTP-Absender, DNS-Record-Vorlage.
 
 ## 7. Kundenportal
@@ -156,7 +161,7 @@ Let's Encrypt werden angelegt bzw. umgestellt), Portal-Port, Cloudflare-Zugang
 - HTTPS-only, HSTS; Zertifikat wird vom Plugin automatisch erneuert (aaPanel-Renewal).
 
 ### Funktionen für den Kunden
-- **Dashboard:** Paket, Verbrauch (Balken), Domains, Webseiten, Postfächer, SSL-Ablauf.
+- **Dashboard:** Paket, genutzte/verfügbare Anzahlen, Domains, Webseiten, Postfächer, SSL-Ablauf.
 - **DNS (Cloudflare):** Records A, AAAA, CNAME, MX, TXT, SRV, CAA anlegen/ändern/löschen,
   TTL, Proxy an/aus. Validierung (Syntax, CNAME-Konflikte). Systemrecords (MX, DKIM,
   SPF der Mail-Domain) sind geschützt bzw. nur mit Warnung änderbar. **Keine** neuen
@@ -165,7 +170,7 @@ Let's Encrypt werden angelegt bzw. umgestellt), Portal-Port, Cloudflare-Zugang
   gesetzt), löschen, PHP-Version, SSL + HTTPS erzwingen, Weiterleitungen, Standard-Dokument.
 - **FTP** (falls freigegeben): Zugänge pro Webseite anlegen, Passwort ändern, löschen.
 - **Datenbanken** (falls freigegeben): anlegen, Passwort ändern, löschen, Link zu phpMyAdmin.
-- **E-Mail:** Postfächer anlegen/löschen, Passwort, Quota, Aliase/Weiterleitungen,
+- **E-Mail:** Postfächer anlegen/löschen, Passwort, Aliase/Weiterleitungen,
   Client-Einstellungen und Webmail-Link.
 - **Konto:** Passwort, 2FA (TOTP), Sprache, Aktivitätsprotokoll.
 
@@ -174,7 +179,8 @@ Let's Encrypt werden angelegt bzw. umgestellt), Portal-Port, Cloudflare-Zugang
 - **Tenant-Isolation:** jedes Objekt wird über `customer_id = session.customer_id` geladen;
   keine ungeprüften IDs an aaPanel/Cloudflare.
 - **Privilegientrennung:** Portal ohne Root; Root-Worker prüft Ownership + Quota erneut.
-- **Cloudflare:** Token mit minimalen Rechten, verschlüsselt gespeichert, nie an den Browser.
+- **Cloudflare:** Global API Key verschlüsselt gespeichert, nur vom Root-Worker genutzt,
+  nie an den Browser, nie in Logs; Adapter mit Aktions-Whitelist (nur DNS-Records).
 - **Eingabevalidierung:** Hostnamen per Regex + IDNA, Pfade nur serverseitig erzeugt,
   keine Shell-Aufrufe mit Nutzereingaben.
 - **Auth:** argon2id, Rate-Limit + Sperre, TOTP, Cookies `Secure/HttpOnly/SameSite=Strict`,
@@ -199,7 +205,7 @@ kundenverwaltung/
 │   ├── app.py, worker.py
 │   ├── routes/ auth.py, dashboard.py, dns.py, sites.py, mail.py, ftp.py, databases.py, account.py
 │   └── templates/, static/
-├── cron/ usage_collector.py, sync.py, ssl_watch.py
+├── cron/ sync.py, ssl_watch.py
 └── tests/
 ```
 
@@ -207,12 +213,12 @@ kundenverwaltung/
 
 | Phase | Inhalt | Ergebnis |
 |-------|--------|----------|
-| **0 – Analyse** | aaPanel-Pro-Version, Mail-Server-Plugin, Cloudflare-Konfiguration in aaPanel, Dateisystem (XFS?) prüfen; API-Signaturen dokumentieren; Test-VM | `compat.py`-Spezifikation |
+| **0 – Analyse** | aaPanel-Pro-Version, Mail-Server-Plugin, Cloudflare-Konfiguration in aaPanel prüfen; API-Signaturen dokumentieren; Test-VM | `compat.py`-Spezifikation |
 | **1 – Grundgerüst** | Plugin-Skelett, `install.sh`, SQLite + Migrationen, i18n-Grundlage, Einstellungen, Pakete- und Kunden-CRUD | Plugin installierbar |
 | **2 – Provisionierung** | Adapter Site/SSL/Cloudflare/Mail/FTP/DB, Wizard, Quota + Freigaben, Audit | Admin-Workflow komplett |
 | **3 – Portal MVP** | FastAPI-Portal, Worker, automatischer vHost + SSL für Portal-Domain, Login + 2FA, Dashboard, DNS, E-Mail | Kunde verwaltet DNS & Mail |
 | **4 – Portal erweitert** | Webseiten, SSL, Redirects, PHP, FTP, Datenbanken | volle Self-Service-Funktion |
-| **5 – Betrieb** | Disk-Quota (XFS/Cron), Sync-Job, SSL-Warnung, Sperren, Benachrichtigungen, Branding | produktionsreif |
+| **5 – Betrieb** | Sync-Job, SSL-Warnung, Sperren, Benachrichtigungen, Branding | produktionsreif |
 | **6 – Optional** | Rechnungs-/WHMCS-Anbindung, 1-Klick-WordPress, Dateimanager, Reseller-Ebene | — |
 
 ## 11. Tests
@@ -224,7 +230,4 @@ kundenverwaltung/
 
 ## 12. Noch offen
 
-1. Liegt `/www` auf **XFS mit `prjquota`**? (Sonst Web-Disk-Quota nur per Messung.)
-   Prüfen mit: `df -T /www` und `mount | grep /www`.
-2. Ist das Cloudflare-Konto in aaPanel mit **API-Token** oder mit **Global API Key**
-   hinterlegt? (Token wird empfohlen.)
+Keine offenen Fragen mehr – bereit für Phase 0/1.
