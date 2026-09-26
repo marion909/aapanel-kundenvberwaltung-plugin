@@ -10,10 +10,38 @@ for p in ('class/', PLUGIN_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+import importlib
 import public
 import cm_store
 import cm_api
 import cm_resources
+
+
+def _reload_changed_modules():
+    """aaPanel lädt bei jedem Plugin-Aufruf nur diese Datei neu, die Hilfsmodule
+    bleiben im Panel-Prozess im Speicher. Nach einem Plugin-Update würden sonst
+    alte cm_*.py-Versionen weiterlaufen (z. B. "'Store' object has no attribute
+    'assign_domain'"). Hat sich eines geändert, werden alle drei in
+    Abhängigkeitsreihenfolge neu geladen (cm_resources importiert cm_api -
+    sonst passen z. B. die ApiError-Klassen nicht mehr zusammen)."""
+    global cm_store, cm_api, cm_resources
+    mods = (cm_store, cm_api, cm_resources)
+    stamps = []
+    for m in mods:
+        try:
+            stamps.append(os.path.getmtime(os.path.splitext(m.__file__)[0] + '.py'))
+        except (OSError, AttributeError, TypeError):
+            stamps.append(None)
+    if all(getattr(m, '_cm_loaded_mtime', None) == t for m, t in zip(mods, stamps)):
+        return
+    cm_store = importlib.reload(cm_store)
+    cm_api = importlib.reload(cm_api)
+    cm_resources = importlib.reload(cm_resources)
+    for m, t in zip((cm_store, cm_api, cm_resources), stamps):
+        m._cm_loaded_mtime = t
+
+
+_reload_changed_modules()
 
 
 def _read_version():
