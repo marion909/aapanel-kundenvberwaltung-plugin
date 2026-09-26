@@ -453,6 +453,8 @@
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
        'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'customer_prefix']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
+      $('#mailbox-methods-warn').innerHTML = s.mail_box_actions_configured ? '' :
+        '<div class="warn">Ohne alle drei Aktionsnamen kann das Kundenportal keine Postfächer anlegen, Passwörter ändern oder löschen.</div>';
       f.elements.mail_db_fallback.checked = !!s.mail_db_fallback;
       f.elements.api_key.value = '';
       $('#key-hint').textContent = s.api_key_set ? 'Hinterlegt (' + s.api_key_hint + '). Nur ausfüllen, um ihn zu ändern.' : 'Noch kein Key hinterlegt.';
