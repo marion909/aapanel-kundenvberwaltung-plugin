@@ -23,6 +23,7 @@ const DEFAULT_CFG = {
   mail_box_create_method: '',
   mail_box_setpw_method: '',
   mail_box_delete_method: '',
+  mail_box_default_quota: '1024 MB',
   mail_db_fallback: true,
   customer_prefix: 'K-',
   portal_secret_key: '',

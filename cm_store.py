@@ -21,6 +21,7 @@ DEFAULT_CFG = {
     'mail_box_create_method': '',         # muss über "API-Rohaufruf" ermittelt werden
     'mail_box_setpw_method': '',
     'mail_box_delete_method': '',
+    'mail_box_default_quota': '1024 MB',  # Format "Zahl Einheit", von add_mailbox_v2/update_mailbox_v2 verlangt
     'mail_db_fallback': True,             # nur lesend: /www/vmail/postfixadmin.db
     'customer_prefix': 'K-',
     'portal_secret_key': '',              # wird beim ersten Portal-Start automatisch erzeugt

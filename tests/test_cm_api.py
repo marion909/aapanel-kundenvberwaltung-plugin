@@ -26,22 +26,6 @@ class CmApiTest(unittest.TestCase):
         with self.assertRaises(cm_api.ApiError):
             cm_api.PanelApi.find_rows({'status': -1, 'message': 'Auth failed'})
 
-    def test_expect_ok_raises_on_false_status_and_passes_through_otherwise(self):
-        api = cm_api.PanelApi.__new__(cm_api.PanelApi)  # kein __init__/Netzwerk nötig
-        with self.assertRaises(cm_api.ApiError):
-            api._expect_ok({'status': False, 'msg': 'nope'})
-        self.assertEqual(api._expect_ok({'status': True}), {'status': True})
-        self.assertEqual(api._expect_ok('plain text'), 'plain text')
-
-    def test_mail_box_write_methods_fail_clearly_when_unconfigured(self):
-        api = cm_api.PanelApi.__new__(cm_api.PanelApi)
-        with self.assertRaises(cm_api.ApiError):
-            api.mail_box_create(['/plugin'], '', 'example.com', 'user@example.com', 'pw12345678')
-        with self.assertRaises(cm_api.ApiError):
-            api.mail_box_set_password(['/plugin'], '', 'example.com', 'user@example.com', 'pw12345678')
-        with self.assertRaises(cm_api.ApiError):
-            api.mail_box_delete(['/plugin'], '', 'example.com', 'user@example.com')
-
 
 if __name__ == '__main__':
     unittest.main()

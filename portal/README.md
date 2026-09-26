@@ -70,6 +70,17 @@ das vorhandene **„API-Rohaufruf"**-Diagnosefeld (Einstellungen-Tab) gegen die
 eigene Installation ermitteln. Ohne diese Konfiguration meldet das Portal beim
 Postfach-Anlegen/Ändern/Löschen einen klaren Fehler statt etwas Falsches zu tun.
 
+**Bei einer aaPanel-Version mit `mail_sys` 8.24.0 bestätigt funktionierend:**
+`add_mailbox_v2` (braucht `domain`, `username`=volle Adresse, `password`,
+`quota` im Format `"Zahl Einheit"` z. B. `"1024 MB"`, `full_name`),
+`update_mailbox_v2` (dieselben Felder plus `active`, `is_admin` - überschreibt
+offenbar den kompletten Datensatz, deshalb schickt der Portal-Code beim
+Passwortändern die aktuellen Werte mit statt nur das Passwort), `delete_mailbox`
+(nur `domain` + `username`). Andere `mail_sys`-Versionen können andere Namen
+oder Pflichtfelder haben - bei Fehlern zeigt das „API-Rohaufruf"-Diagnosefeld
+oft den echten Python-Traceback aus `mail_sys_main.py` inkl. der fehlenden
+Feldnamen, das war hier der schnellste Weg zur Lösung.
+
 Pro Kunde, der Zugang bekommen soll: im Admin-Plugin auf der Kundenseite
 („Stammdaten"-Tab) Portal-Zugang aktivieren und ein Passwort setzen. Der Kunde
 loggt sich anschließend mit seiner **Kundennummer** und diesem Passwort ein.

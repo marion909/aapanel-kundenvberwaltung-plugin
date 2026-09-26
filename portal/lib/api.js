@@ -223,15 +223,24 @@ class PanelApi {
     throw last || new ApiError('Kein Plugin-Pfad konfiguriert');
   }
 
-  async mailBoxCreate(pluginPaths, method, domain, username, password) {
+  // quota im Format "Zahl Einheit" (z. B. "1024 MB") - add_mailbox_v2/update_mailbox_v2
+  // parsen das serverseitig per str.split(), ein reiner Byte-Wert schlägt fehl.
+  async mailBoxCreate(pluginPaths, method, domain, username, password, quota, fullName) {
     if (!method) throw new ApiError('Mailbox-Erstellung ist nicht konfiguriert (Einstellungen → Mailserver)');
-    const [res] = await this._mailWriteCall(pluginPaths, method, { domain, username, password });
+    const [res] = await this._mailWriteCall(pluginPaths, method,
+      { domain, username, password, quota, full_name: fullName });
     return res;
   }
 
-  async mailBoxSetPassword(pluginPaths, method, domain, username, password) {
+  // update_mailbox_v2 überschreibt offenbar den kompletten Datensatz - active/is_admin
+  // müssen deshalb mitgeschickt werden, sonst würden sie zurückgesetzt.
+  async mailBoxSetPassword(pluginPaths, method, domain, username, password, quota, fullName, active, isAdmin) {
     if (!method) throw new ApiError('Postfach-Passwortänderung ist nicht konfiguriert (Einstellungen → Mailserver)');
-    const [res] = await this._mailWriteCall(pluginPaths, method, { domain, username, password });
+    const [res] = await this._mailWriteCall(pluginPaths, method, {
+      domain, username, password, quota, full_name: fullName,
+      active: active === undefined ? 1 : active,
+      is_admin: isAdmin === undefined ? 0 : isAdmin,
+    });
     return res;
   }
 

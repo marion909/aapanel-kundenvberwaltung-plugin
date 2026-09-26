@@ -48,6 +48,14 @@ function flash(req, message, type) {
   req.session.flash.push({ type: type || 'message', message });
 }
 
+// add_mailbox_v2/update_mailbox_v2 parsen quota serverseitig per str.split() in
+// (Zahl, Einheit) - ein Wert, der nicht zu "<Zahl> <Einheit>" passt (z. B. eine
+// rohe Byte-Zahl aus einer Auflistung), würde den Aufruf zum Absturz bringen.
+function normalizeQuota(value, fallback) {
+  const s = String(value || '').trim();
+  return /^\d+\s+\S+$/.test(s) ? s : fallback;
+}
+
 function fmttime(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
@@ -276,8 +284,11 @@ app.post(
     const full = `${local}@${domain}`;
     const cfg = store.loadCfg();
     const api = resources.makeApi(cfg);
+    const quota = cfg.mail_box_default_quota || '1024 MB';
+    const fullName = req.customer.company ||
+      `${req.customer.first_name || ''} ${req.customer.last_name || ''}`.trim() || local;
     try {
-      await api.mailBoxCreate(resources.mailPluginPaths(cfg), cfg.mail_box_create_method, domain, full, password);
+      await api.mailBoxCreate(resources.mailPluginPaths(cfg), cfg.mail_box_create_method, domain, full, password, quota, fullName);
     } catch (e) {
       flash(req, e.message, 'error');
       return res.redirect('/mail');
@@ -304,8 +315,17 @@ app.post(
     const domain = row.ref_name.split('@').pop();
     const cfg = store.loadCfg();
     const api = resources.makeApi(cfg);
+    // update_mailbox_v2 überschreibt offenbar den kompletten Datensatz - aktuelle
+    // Werte übernehmen, damit Kontingent/Anzeigename/Status nicht zurückgesetzt werden.
+    const idx = await liveIndex(cfg);
+    const info = idx ? idx.get(`mailbox\u0000${row.ref_name}`) : null;
+    const quota = normalizeQuota(info && info.quota, cfg.mail_box_default_quota || '1024 MB');
+    const fullName = (info && info.full_name) || row.ref_name.split('@')[0];
+    const active = info && info.active !== undefined ? info.active : 1;
     try {
-      await api.mailBoxSetPassword(resources.mailPluginPaths(cfg), cfg.mail_box_setpw_method, domain, row.ref_name, password);
+      await api.mailBoxSetPassword(
+        resources.mailPluginPaths(cfg), cfg.mail_box_setpw_method,
+        domain, row.ref_name, password, quota, fullName, active, 0);
       flash(req, `Passwort für „${row.ref_name}“ wurde geändert.`);
     } catch (e) {
       flash(req, e.message, 'error');

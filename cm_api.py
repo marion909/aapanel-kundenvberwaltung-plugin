@@ -87,12 +87,6 @@ class PanelApi(object):
                 raise ApiError('API-Authentifizierung: ' + msg)
         return data
 
-    def _expect_ok(self, data):
-        """Für Schreibaktionen: liefert data unverändert zurück, wirft aber bei {'status': False}."""
-        if isinstance(data, dict) and data.get('status') is False:
-            raise ApiError(str(data.get('msg', 'Aktion fehlgeschlagen')))
-        return data
-
     # ---------- Hilfen zum Normalisieren v1/v2 ----------
     @staticmethod
     def unwrap(data):
@@ -160,16 +154,10 @@ class PanelApi(object):
                 })
         return out, errors
 
-    def site_start(self, site_id, name):
-        """Startet eine gestoppte Website. Nur für Ressourcen aufrufen, deren
-        Zuordnung zum aufrufenden Kunden vorher geprüft wurde (Portal)."""
-        return self._expect_ok(self.raw('/site?action=SiteStart', {'id': site_id, 'name': name}))
-
-    def site_stop(self, site_id, name):
-        """Stoppt eine Website. Aufrufer muss die Eigentümerschaft vorher prüfen."""
-        return self._expect_ok(self.raw('/site?action=SiteStop', {'id': site_id, 'name': name}))
-
     # ---------- Mailserver (mail_sys) ----------
+    # Nur Lese-Zugriffe: Schreibaktionen (Postfach anlegen/ändern/löschen,
+    # Website Start/Stopp) werden ausschließlich vom Node-Portal ausgeführt
+    # (portal/lib/api.js), das eine eigene, unabhängige Implementierung hat.
     def _mail_call(self, plugin_paths, method, params=None):
         last = None
         for pp in plugin_paths:
@@ -180,37 +168,6 @@ class PanelApi(object):
             except ApiError as e:
                 last = e
         raise last or ApiError('Kein Plugin-Pfad konfiguriert')
-
-    def _mail_write_call(self, plugin_paths, method, params=None):
-        """Wie _mail_call, aber für Schreibaktionen: eine Schreibaktion liefert
-        typischerweise {'status': true} ohne Liste - find_rows() würde das
-        fälschlich als '0 Treffer' werten, daher hier _expect_ok() statt find_rows()."""
-        last = None
-        for pp in plugin_paths:
-            p = {'name': 'mail_sys', 's': method}
-            p.update(params or {})
-            try:
-                return self._expect_ok(self.raw(pp + '?action=a', p)), pp
-            except ApiError as e:
-                last = e
-        raise last or ApiError('Kein Plugin-Pfad konfiguriert')
-
-    def mail_box_create(self, plugin_paths, method, domain, username, password):
-        if not method:
-            raise ApiError('Mailbox-Erstellung ist nicht konfiguriert (Einstellungen → Mailserver)')
-        return self._mail_write_call(plugin_paths, method,
-                                     {'domain': domain, 'username': username, 'password': password})[0]
-
-    def mail_box_set_password(self, plugin_paths, method, domain, username, password):
-        if not method:
-            raise ApiError('Postfach-Passwortänderung ist nicht konfiguriert (Einstellungen → Mailserver)')
-        return self._mail_write_call(plugin_paths, method,
-                                     {'domain': domain, 'username': username, 'password': password})[0]
-
-    def mail_box_delete(self, plugin_paths, method, domain, username):
-        if not method:
-            raise ApiError('Postfach-Löschung ist nicht konfiguriert (Einstellungen → Mailserver)')
-        return self._mail_write_call(plugin_paths, method, {'domain': domain, 'username': username})[0]
 
     def list_mail_domains(self, plugin_paths, method):
         rows, used = self._mail_call(plugin_paths, method, {'p': 1, 'size': 1000, 'limit': 1000})

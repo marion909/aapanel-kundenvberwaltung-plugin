@@ -451,7 +451,7 @@
       const s = r.data;
       const f = $('#settings-form');
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
-       'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'customer_prefix']
+       'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
       $('#mailbox-methods-warn').innerHTML = s.mail_box_actions_configured ? '' :
         '<div class="warn">Ohne alle drei Aktionsnamen kann das Kundenportal keine Postfächer anlegen, Passwörter ändern oder löschen.</div>';

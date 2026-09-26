@@ -264,7 +264,8 @@ class customer_mgr_main:
         cfg = cm_store.load_cfg()
         for k in ('base_url', 'data_path', 'site_project_types', 'mail_plugin_paths',
                   'mail_domains_method', 'mail_boxes_method', 'customer_prefix',
-                  'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method'):
+                  'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method',
+                  'mail_box_default_quota'):
             if k in data:
                 cfg[k] = str(data[k] or '').strip()
         if 'mail_db_fallback' in data:
