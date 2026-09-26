@@ -276,6 +276,12 @@ class Store {
     return r;
   }
 
+  getLog(cid, limit) {
+    return this.db
+      .prepare('SELECT * FROM audit_log WHERE customer_id=? ORDER BY id DESC LIMIT ?')
+      .all(cid, limit || 200);
+  }
+
   log(action, cid, detail) {
     this.db
       .prepare('INSERT INTO audit_log (ts, action, customer_id, detail) VALUES (?,?,?,?)')

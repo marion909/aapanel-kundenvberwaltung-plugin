@@ -72,6 +72,18 @@ app.set('trust proxy', 'loopback');
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.locals.fmttime = fmttime;
+app.locals.appVersion = (() => {
+  // info.json liegt im Plugin-Ordner eine Ebene höher und trägt die Release-Version
+  for (const f of [path.join(__dirname, '..', 'info.json'), path.join(__dirname, 'package.json')]) {
+    try {
+      const j = JSON.parse(require('fs').readFileSync(f, 'utf8'));
+      if (j.versions || j.version) return String(j.versions || j.version);
+    } catch (e) {
+      // nächste Quelle versuchen
+    }
+  }
+  return '';
+})();
 
 app.use('/static', express.static(path.join(__dirname, 'static')));
 // 3 MB: der Datei-Editor schickt Dateien bis 2 MB als Formularfeld
@@ -120,6 +132,7 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
+  res.locals.currentPath = req.path;
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('X-Frame-Options', 'DENY');
   res.set('Referrer-Policy', 'same-origin');
@@ -195,17 +208,8 @@ app.post('/logout', (req, res) => {
   res.redirect('/login');
 });
 
-// ---------- Dashboard ----------
-app.get(
-  '/',
-  loginRequired,
-  asyncHandler(async (req, res) => {
-    const asg = req.store.assignments(req.customer.id);
-    const counts = { site: 0, mail_domain: 0, mailbox: 0, domain: 0 };
-    for (const a of asg) counts[a.type] = (counts[a.type] || 0) + 1;
-    res.render('dashboard', { title: 'Übersicht', counts });
-  })
-);
+// ---------- Übersicht, Dateiverwaltung, SSL, Journal ----------
+require('./routes/overview')(app, { loginRequired, asyncHandler, cache });
 
 // ---------- Websites (Liste, Anlegen, Konfiguration, Dateimanager) ----------
 require('./routes/sites')(app, { loginRequired, ownedAssignment, asyncHandler, flash, cache, HttpError });

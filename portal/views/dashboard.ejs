@@ -1,11 +1,82 @@
 <%- include('partials/header') %>
-<h1>Willkommen, <%= customer.company || customer.first_name %></h1>
-<div class="cards">
-  <a class="card" href="/sites"><strong><%= counts.site %></strong><span>Website(n)</span></a>
-  <a class="card" href="/mail"><strong><%= counts.mail_domain %></strong><span>Mail-Domain(s)</span></a>
-  <a class="card" href="/mail"><strong><%= counts.mailbox %></strong><span>Postfach/Postfächer</span></a>
+<section class="panel">
+  <div class="panel-head">Übersicht</div>
+  <div class="cards">
+    <div class="card">
+      <span class="k">Heutige Anfragen</span>
+      <strong><%= cards.today === null ? '–' : cards.today.toLocaleString('de-AT') %></strong>
+    </div>
+    <a class="card" href="/sites">
+      <span class="k">Website</span>
+      <strong><%= cards.sites %><small> /<%= cards.maxSites ? cards.maxSites : '∞' %></small></strong>
+    </a>
+    <a class="card" href="/mail">
+      <span class="k">Mail-Domains</span>
+      <strong><%= cards.mailDomains %></strong>
+    </a>
+    <a class="card" href="/mail">
+      <span class="k">Postfächer</span>
+      <strong><%= cards.mailboxes %></strong>
+    </a>
+  </div>
+  <% if (cards.domains.length) { %>
+  <p class="panel-note">Ihre Domain-Bereiche: <% cards.domains.forEach(function (d, i) { %><code><%= d %></code><%= i < cards.domains.length - 1 ? ' ' : '' %><% }) %> – darin können Sie unter <a href="/sites">Website</a> eigene Websites und Subdomains anlegen.</p>
+  <% } %>
+</section>
+
+<div class="grid-2">
+  <section class="panel">
+    <div class="panel-head">Anfragen<span class="muted"><%= trafficTotal === null ? '' : ' · letzte 30 Tage: ' + trafficTotal.toLocaleString('de-AT') %></span></div>
+    <div class="panel-body">
+      <% if (trafficChart) { %>
+        <%- trafficChart %>
+      <% } else { %>
+        <p class="empty">Keine Statistik verfügbar<% if (!sites.length) { %> – noch keine Website vorhanden<% } %>.</p>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">Festplatte<span class="muted"> · gesamt <%= fmtBytes(diskTotal) %></span></div>
+    <div class="panel-body">
+      <% if (!disk.length) { %>
+        <p class="empty">Noch keine Website vorhanden.</p>
+      <% } else { %>
+      <ul class="bars">
+        <% disk.forEach(function (d) { %>
+        <li>
+          <a href="/sites/<%= d.id %>/files"><%= d.name %></a>
+          <span class="bar"><span style="width: <%= d.bytes === null ? 0 : Math.max(2, Math.round(d.bytes / diskMax * 100)) %>%"></span></span>
+          <span class="v"><%= d.bytes === null ? 'wird berechnet …' : fmtBytes(d.bytes) + (d.partial ? '+' : '') %></span>
+        </li>
+        <% }) %>
+      </ul>
+      <% } %>
+    </div>
+  </section>
 </div>
-<% if (customer.portal_last_login) { %>
-<p class="hint">Letzte Anmeldung: <%= fmttime(customer.portal_last_login) %></p>
-<% } %>
+
+<section class="panel">
+  <div class="panel-head">Websites<a class="head-link" href="/sites">Alle verwalten →</a></div>
+  <div class="panel-body flush">
+  <% if (!sites.length) { %>
+    <p class="empty pad">Noch keine Website vorhanden. <a href="/sites">Jetzt anlegen</a></p>
+  <% } else { %>
+    <table class="res">
+      <thead><tr><th>Domain</th><th>Status</th><th>PHP</th><th>SSL</th><th></th></tr></thead>
+      <tbody>
+      <% sites.forEach(function (s) { var ssl = s.info && s.info.ssl; %>
+        <tr>
+          <td><% if (s.state !== 'missing') { %><a href="/sites/<%= s.id %>"><%= s.ref_name %></a><% } else { %><%= s.ref_name %><% } %></td>
+          <td><% if (s.state === 'missing') { %><span class="badge warn">nicht vorhanden</span><% } else if (s.state === 'unknown') { %><span class="badge off">unbekannt</span><% } else if (s.info.status === '0') { %><span class="badge off">gestoppt</span><% } else { %><span class="badge on">läuft</span><% } %></td>
+          <td><%= (s.info && s.info.php_version) || '' %></td>
+          <td><% if (ssl && typeof ssl === 'object') { %><span class="badge <%= ssl.endtime !== undefined && ssl.endtime < 14 ? 'warn' : 'on' %>">noch <%= ssl.endtime %> Tage</span><% } else if (s.state === 'ok') { %><span class="badge off">kein SSL</span><% } %></td>
+          <td class="actions"><% if (s.state !== 'missing') { %><a class="btn small" href="/sites/<%= s.id %>/files">Dateien</a><% } %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+  </div>
+</section>
 <%- include('partials/footer') %>

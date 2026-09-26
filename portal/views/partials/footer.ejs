@@ -1,4 +1,11 @@
+<% if (typeof customer !== 'undefined' && customer) { %>
+    </main>
+    <footer class="foot">Kundenportal<% if (typeof appVersion !== 'undefined') { %> v<%= appVersion %><% } %> · betrieben mit aaPanel</footer>
+  </div>
+</div>
+<% } else { %>
 </main>
+<% } %>
 <script src="/static/portal.js"></script>
 </body>
 </html>

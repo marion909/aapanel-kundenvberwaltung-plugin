@@ -1,14 +1,12 @@
 <%- include('partials/header') %>
-<div class="head-row">
-  <h1>Websites</h1>
-  <span class="hint"><%= quota.sites %> von <%= quota.max ? quota.max : 'unbegrenzt' %> Websites</span>
-</div>
-
+<section class="panel">
+<div class="panel-head">Website<span class="muted"> · <%= quota.sites %> von <%= quota.max ? quota.max : 'unbegrenzt' %></span></div>
+<div class="panel-body flush">
 <% if (!sites.length) { %>
-<p class="empty">Dir sind aktuell keine Websites zugeordnet.</p>
+<p class="empty pad">Dir sind aktuell keine Websites zugeordnet.</p>
 <% } else { %>
 <table class="res">
-<thead><tr><th>Domain</th><th>Status</th><th>SSL</th><th>PHP</th><th></th></tr></thead>
+<thead><tr><th>Domain</th><th>Status</th><th>PHP</th><th>SSL</th><th></th></tr></thead>
 <tbody>
 <% sites.forEach(function (s) { %>
 <tr class="<%= s.state === 'missing' ? 'missing' : '' %>">
@@ -19,8 +17,8 @@
     <% } else if (s.info.status === '0') { %><span class="badge off">gestoppt</span>
     <% } else { %><span class="badge on">läuft</span><% } %>
   </td>
+  <td><%= s.info.php_version === '00' ? 'Statisch' : (s.info.php_version || '') %></td>
   <td><% if (s.info.ssl && typeof s.info.ssl === 'object') { %><span class="badge on">bis <%= s.info.ssl.notAfter %></span><% } else if (s.state === 'ok') { %><span class="badge off">nein</span><% } %></td>
-  <td><%= s.info.php_version || '' %></td>
   <td class="actions">
     <% if (s.state !== 'missing') { %>
       <a class="btn" href="/sites/<%= s.id %>">Verwalten</a>
@@ -45,8 +43,12 @@
 </tbody>
 </table>
 <% } %>
+</div>
+</section>
 
-<h2>Neue Website / Subdomain anlegen</h2>
+<section class="panel">
+<div class="panel-head">Neue Website / Subdomain anlegen</div>
+<div class="panel-body">
 <% if (!areas.length) { %>
 <p class="empty">Dir ist noch kein Domain-Bereich zugeordnet. Bitte wende dich an den Administrator.</p>
 <% } else if (quota.max && quota.sites >= quota.max) { %>
@@ -77,4 +79,6 @@
   <button type="submit" class="primary">Website anlegen</button>
 </form>
 <% } %>
+</div>
+</section>
 <%- include('partials/footer') %>

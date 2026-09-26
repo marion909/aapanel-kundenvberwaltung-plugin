@@ -151,6 +151,7 @@ class PanelApi(object):
                     'ps': r.get('ps', ''),
                     'edate': r.get('edate', ''),
                     'ssl': r.get('ssl'),
+                    'php_version': r.get('php_version', ''),
                 })
         return out, errors
 
