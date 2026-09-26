@@ -1,6 +1,16 @@
 (function () {
   'use strict';
 
+  // Mobiles Menü auf- und zuklappen
+  var toggle = document.querySelector('.menu-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      var side = toggle.closest('.side');
+      var open = side.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+
   function checked(form) {
     return Array.prototype.slice.call(form.querySelectorAll('input[name="paths"]:checked'));
   }
