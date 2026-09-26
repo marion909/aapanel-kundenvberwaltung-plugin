@@ -1,0 +1,19 @@
+<%- include('partials/header') %>
+<section class="panel">
+  <div class="panel-head">Journal</div>
+  <div class="panel-body flush">
+  <% if (!entries.length) { %>
+    <p class="empty pad">Noch keine Einträge.</p>
+  <% } else { %>
+    <table class="res">
+      <thead><tr><th>Zeitpunkt</th><th>Aktion</th><th>Details</th></tr></thead>
+      <tbody>
+      <% entries.forEach(function (e) { %>
+        <tr><td class="nowrap"><%= fmttime(e.ts) %></td><td><%= e.action %></td><td class="detail"><%= e.detail %></td></tr>
+      <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+  </div>
+</section>
+<%- include('partials/footer') %>

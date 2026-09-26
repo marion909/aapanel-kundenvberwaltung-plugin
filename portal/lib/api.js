@@ -183,6 +183,7 @@ class PanelApi {
           ps: r.ps || '',
           edate: r.edate || '',
           ssl: r.ssl,
+          php_version: r.php_version || '',
         });
       }
     }

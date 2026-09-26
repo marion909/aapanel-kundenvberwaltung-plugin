@@ -1,0 +1,17 @@
+<%- include('partials/header') %>
+<section class="panel">
+  <div class="panel-head">Dateiverwaltung</div>
+  <div class="panel-body">
+  <% if (!sites.length) { %>
+    <p class="empty">Noch keine Website vorhanden. <a href="/sites">Jetzt anlegen</a></p>
+  <% } else { %>
+    <p class="hint">Website wählen, deren Dateien Sie verwalten möchten:</p>
+    <div class="cards">
+      <% sites.forEach(function (s) { %>
+      <a class="card" href="/sites/<%= s.id %>/files"><span class="k">Website</span><strong class="name"><%= s.ref_name %></strong></a>
+      <% }) %>
+    </div>
+  <% } %>
+  </div>
+</section>
+<%- include('partials/footer') %>

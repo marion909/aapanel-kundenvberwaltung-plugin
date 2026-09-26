@@ -1,0 +1,26 @@
+<%- include('partials/header') %>
+<section class="panel">
+  <div class="panel-head">SSL-Zertifikate</div>
+  <div class="panel-body flush">
+  <% if (!sites.length) { %>
+    <p class="empty pad">Noch keine Website vorhanden.</p>
+  <% } else { %>
+    <table class="res">
+      <thead><tr><th>Website</th><th>Aussteller</th><th>Gültig bis</th><th>Restlaufzeit</th><th></th></tr></thead>
+      <tbody>
+      <% sites.forEach(function (s) { var ssl = s.info && s.info.ssl; var has = ssl && typeof ssl === 'object'; %>
+        <tr>
+          <td><%= s.ref_name %></td>
+          <td><%= has ? (ssl.issuer || '') : '' %></td>
+          <td><%= has ? ssl.notAfter : '' %></td>
+          <td><% if (has) { %><span class="badge <%= ssl.endtime < 14 ? 'warn' : 'on' %>"><%= ssl.endtime %> Tage</span><% } else if (s.state === 'ok') { %><span class="badge off">kein Zertifikat</span><% } else if (s.state === 'missing') { %><span class="badge warn">nicht vorhanden</span><% } %></td>
+          <td class="actions"><% if (s.state !== 'missing') { %><a class="btn small" href="/sites/<%= s.id %>/ssl"><%= has ? 'Verwalten' : 'Zertifikat ausstellen' %></a><% } %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <% if (!live) { %><p class="hint pad">Live-Status aus aaPanel derzeit nicht verfügbar.</p><% } %>
+  <% } %>
+  </div>
+</section>
+<%- include('partials/footer') %>
