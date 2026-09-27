@@ -75,7 +75,7 @@
     </select>
   </label>
   <label class="check"><input type="checkbox" name="www" value="1" checked> www-Alias hinzufügen (www.&lt;hostname&gt;)</label>
-  <label class="check"><input type="checkbox" name="ssl" value="1" checked> Let's-Encrypt-SSL automatisch ausstellen</label>
+  <% if (limits.ssl) { %><label class="check"><input type="checkbox" name="ssl" value="1" checked> Let's-Encrypt-SSL automatisch ausstellen</label><% } %>
   <button type="submit" class="primary">Website anlegen</button>
 </form>
 <% } %>

@@ -172,6 +172,56 @@ class CmStoreTest(unittest.TestCase):
             self.cm_store.save_logo(b'\x89PNG\r\n\x1a\n' + b'0' * (1024 * 1024))
         self.assertIsNone(self.cm_store.logo_path())
 
+    def test_package_crud_and_delete_protection(self):
+        pid = self.store.save_package({'name': 'Business', 'max_sites': '5', 'max_mailboxes': 10, 'ssl_allowed': False})
+        p = self.store.get_package(pid)
+        self.assertEqual((p['max_sites'], p['max_mailboxes'], p['ssl_allowed']), (5, 10, 0))
+        with self.assertRaises(ValueError):
+            self.store.save_package({'name': 'business'})  # Name eindeutig (ohne Groß/Klein)
+        with self.assertRaises(ValueError):
+            self.store.save_package({'name': 'X', 'max_sites': -1})
+        self.store.save_package({'id': pid, 'name': 'Business', 'max_sites': 6})
+        self.assertEqual(self.store.get_package(pid)['max_sites'], 6)
+        cid = self._make_customer(package_id=str(pid))
+        self.assertEqual(self.store.get_customer(cid)['package_id'], pid)
+        self.assertEqual(self.store.list_customers()[0]['package_name'], 'Business')
+        with self.assertRaises(ValueError):
+            self.store.delete_package(pid)
+        self.store.save_customer({'id': cid, 'company': 'Test GmbH', 'package_id': ''})
+        self.assertIsNone(self.store.get_customer(cid)['package_id'])
+        self.store.delete_package(pid)
+        self.assertEqual(self.store.list_packages(), [])
+
+    def test_effective_limits_precedence(self):
+        eff = self.cm_store.effective_limits
+        cfg = {'site_default_max_sites': 3, 'portal_max_upload_mb': 256}
+        pkg = {'max_sites': 5, 'max_domains': 2, 'max_mail_domains': 1, 'max_mailboxes': 10,
+               'mailbox_quota_mb': 2048, 'max_upload_mb': 0, 'ssl_allowed': 0}
+        self.assertEqual(eff({'max_sites': -1}, None, cfg)['site'], 3)
+        lim = eff({'max_sites': -1}, pkg, cfg)
+        self.assertEqual((lim['site'], lim['domain'], lim['mailbox'], lim['mailbox_quota_mb']), (5, 2, 10, 2048))
+        self.assertEqual(lim['upload_mb'], 256)
+        self.assertFalse(lim['ssl'])
+        self.assertEqual(eff({'max_sites': 0}, pkg, cfg)['site'], 0)   # Kunde: unbegrenzt
+        self.assertEqual(eff({'max_sites': 8}, pkg, cfg)['site'], 8)
+        self.assertTrue(eff({'max_sites': -1}, None, cfg)['ssl'])
+
+    def test_assign_enforces_package_limits_unless_forced(self):
+        pid = self.store.save_package({'name': 'Mini', 'max_sites': 1, 'max_domains': 1})
+        cid = self._make_customer(package_id=pid)
+        self.store.assign(cid, [{'type': 'site', 'ref_name': 'a.at'}], {}, enforce_limits=True)
+        with self.assertRaises(self.cm_store.LimitError) as ctx:
+            self.store.assign(cid, [{'type': 'site', 'ref_name': 'b.at'}], {}, enforce_limits=True)
+        self.assertIn('Paket-Limit', str(ctx.exception))
+        self.store.assign(cid, [{'type': 'site', 'ref_name': 'b.at'}], {}, enforce_limits=False)
+        self.assertEqual(self.store.over_limits(self.store.get_customer(cid)), ['Websites: 2 von 1'])
+        self.store.assign_domain(cid, 'a.at', {}, enforce_limits=True)
+        with self.assertRaises(self.cm_store.LimitError):
+            self.store.assign_domain(cid, 'b.at', {}, enforce_limits=True)
+        # Mail-Domains sind im Paket unbegrenzt
+        self.store.assign(cid, [{'type': 'mail_domain', 'ref_name': 'a.at'}, {'type': 'mail_domain', 'ref_name': 'b.at'}],
+                          {}, enforce_limits=True)
+
 
 if __name__ == '__main__':
     unittest.main()

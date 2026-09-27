@@ -20,6 +20,7 @@ const cookieSession = require('cookie-session');
 const store = require('./lib/store');
 const { ApiError } = require('./lib/api');
 const resources = require('./lib/resources');
+const { effectiveLimits } = require('./lib/packages');
 
 const cfgAtBoot = store.loadCfg();
 if (!cfgAtBoot.portal_secret_key) {
@@ -172,6 +173,12 @@ function loginRequired(req, res, next) {
   }
   req.customer = customer;
   res.locals.customer = customer;
+  // Hosting-Paket und wirksame Limits (für Durchsetzung und Anzeige)
+  const pkg = req.store.getPackage(customer.package_id);
+  req.package = pkg;
+  req.limits = effectiveLimits(customer, pkg, store.loadCfg());
+  res.locals.pkg = pkg;
+  res.locals.limits = req.limits;
   next();
 }
 
@@ -250,7 +257,7 @@ app.get(
     const idx = await liveIndex(cfg);
     resources.annotateAssignments(domains, idx);
     resources.annotateAssignments(boxes, idx);
-    res.render('mail', { title: 'E-Mail', domains, boxes });
+    res.render('mail', { title: 'E-Mail', domains, boxes, usage: req.store.usage(req.customer.id) });
   })
 );
 
@@ -266,10 +273,16 @@ app.post(
       flash(req, 'Postfachname und Passwort sind erforderlich.', 'error');
       return res.redirect('/mail');
     }
+    const max = req.limits.mailbox;
+    const used = req.store.usage(req.customer.id).mailbox;
+    if (max && used >= max) {
+      flash(req, `Postfach-Limit Ihres Pakets erreicht (${used} von ${max}).`, 'error');
+      return res.redirect('/mail');
+    }
     const full = `${local}@${domain}`;
     const cfg = store.loadCfg();
     const api = resources.makeApi(cfg);
-    const quota = cfg.mail_box_default_quota || '1024 MB';
+    const quota = req.limits.mailbox_quota_mb ? `${req.limits.mailbox_quota_mb} MB` : cfg.mail_box_default_quota || '1024 MB';
     const fullName = req.customer.company ||
       `${req.customer.first_name || ''} ${req.customer.last_name || ''}`.trim() || local;
     try {
@@ -304,7 +317,8 @@ app.post(
     // Werte übernehmen, damit Kontingent/Anzeigename/Status nicht zurückgesetzt werden.
     const idx = await liveIndex(cfg);
     const info = idx ? idx.get(`mailbox\u0000${row.ref_name}`) : null;
-    const quota = normalizeQuota(info && info.quota, cfg.mail_box_default_quota || '1024 MB');
+    const fallbackQuota = req.limits.mailbox_quota_mb ? `${req.limits.mailbox_quota_mb} MB` : cfg.mail_box_default_quota || '1024 MB';
+    const quota = normalizeQuota(info && info.quota, fallbackQuota);
     const fullName = (info && info.full_name) || row.ref_name.split('@')[0];
     const active = info && info.active !== undefined ? info.active : 1;
     try {

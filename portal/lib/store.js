@@ -77,6 +77,20 @@ CREATE TABLE IF NOT EXISTS customers (
   portal_password_set_at INTEGER NOT NULL DEFAULT 0,
   portal_last_login INTEGER NOT NULL DEFAULT 0,
   max_sites INTEGER NOT NULL DEFAULT -1,
+  package_id INTEGER,
+  created_at INTEGER, updated_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS packages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  max_sites INTEGER NOT NULL DEFAULT 0,
+  max_domains INTEGER NOT NULL DEFAULT 0,
+  max_mail_domains INTEGER NOT NULL DEFAULT 0,
+  max_mailboxes INTEGER NOT NULL DEFAULT 0,
+  mailbox_quota_mb INTEGER NOT NULL DEFAULT 0,
+  max_upload_mb INTEGER NOT NULL DEFAULT 0,
+  ssl_allowed INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -109,6 +123,7 @@ const MIGRATIONS = [
   ['customers', 'portal_password_set_at', "INTEGER NOT NULL DEFAULT 0"],
   ['customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"],
   ['customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"],
+  ['customers', 'package_id', 'INTEGER'],
 ];
 
 function columnExists(db, table, col) {
@@ -226,6 +241,19 @@ class Store {
       return this.db.prepare('SELECT * FROM assignments').all();
     }
     return this.db.prepare('SELECT * FROM assignments WHERE customer_id=? ORDER BY type, ref_name').all(cid);
+  }
+
+  getPackage(pid) {
+    if (!pid) return null;
+    return this.db.prepare('SELECT * FROM packages WHERE id=?').get(pid) || null;
+  }
+
+  usage(cid) {
+    const counts = { site: 0, domain: 0, mail_domain: 0, mailbox: 0 };
+    for (const r of this.db.prepare('SELECT type, COUNT(*) AS n FROM assignments WHERE customer_id=? GROUP BY type').all(cid)) {
+      if (r.type in counts) counts[r.type] = r.n;
+    }
+    return counts;
   }
 
   // Domain-Bereiche des Kunden (darin darf er Websites/Subdomains anlegen)

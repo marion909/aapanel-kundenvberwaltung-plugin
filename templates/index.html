@@ -13,6 +13,7 @@
     <h1>Kunden</h1>
     <nav class="views" aria-label="Ansichten">
       <button type="button" data-view="customers" class="on">Kunden</button>
+      <button type="button" data-view="packages">Pakete</button>
       <button type="button" data-view="resources">Alle Ressourcen</button>
       <button type="button" data-view="orphans">Prüfung</button>
       <button type="button" data-view="settings">Einstellungen</button>
@@ -32,6 +33,15 @@
     <div class="detail" id="detail">
       <div class="empty"><p>Wähle links einen Kunden oder lege einen neuen an.</p></div>
     </div>
+  </section>
+
+  <!-- Pakete -->
+  <section class="view" id="view-packages" hidden>
+    <div class="bar">
+      <p class="meta">Hosting-Pakete legen fest, wie viele Websites, Domain-Bereiche, Mail-Domains und Postfächer ein Kunde haben darf. 0 = unbegrenzt.</p>
+      <button type="button" class="primary" id="btn-new-package">Neues Paket</button>
+    </div>
+    <div id="package-list"></div>
   </section>
 
   <!-- Alle Ressourcen -->
@@ -131,6 +141,7 @@
       <a href="#doc-ueberblick">Überblick</a>
       <a href="#doc-start">Erste Schritte</a>
       <a href="#doc-kunden">Kunden &amp; Zuordnungen</a>
+      <a href="#doc-pakete">Hosting-Pakete</a>
       <a href="#doc-bereiche">Domain-Bereiche</a>
       <a href="#doc-portal">Kundenportal: Funktionen</a>
       <a href="#doc-hosting">Kundenportal hosten</a>
@@ -166,8 +177,28 @@
         <li><strong>Ressourcen zuordnen:</strong> zeigt alle Websites, Mail-Domains und Postfächer aus aaPanel, die noch keinem Kunden gehören. Der Haken bei einer Domain wählt alles dazu auf einmal.</li>
         <li><strong>Zuordnung lösen</strong> (× am Eintrag): Die Ressource bleibt in aaPanel unverändert, der Kunde sieht sie nur nicht mehr.</li>
         <li><strong>Stammdaten → Kundenportal:</strong> Zugang aktivieren und Passwort setzen (mind. 8 Zeichen). Das Passwort wird nur als Hash gespeichert – bitte beim Setzen notieren und dem Kunden mitteilen. Ein „Passwort vergessen“ gibt es nicht; ein neues Passwort setzt der Admin.</li>
-        <li><strong>Max. Websites:</strong> <code>-1</code> = Standard aus den Einstellungen, <code>0</code> = unbegrenzt, sonst die Anzahl.</li>
+        <li><strong>Hosting-Paket:</strong> bestimmt die Limits, siehe <a href="#doc-pakete">Hosting-Pakete</a>.</li>
+        <li><strong>Max. Websites (Abweichung):</strong> <code>-1</code> = laut Paket, <code>0</code> = unbegrenzt, sonst die Anzahl.</li>
         <li><strong>Prüfung</strong> (Tab oben): listet Zuordnungen, deren Website/Postfach in aaPanel gelöscht wurde.</li>
+      </ul>
+
+      <h2 id="doc-pakete">Hosting-Pakete</h2>
+      <p>Unter <strong>Pakete</strong> legst du Hosting-Pakete an (z. B. Starter, Business, Pro) und weist sie beim Kunden unter „Bearbeiten“ zu.</p>
+      <dl class="doc-dl">
+        <dt>Websites</dt><dd>So viele Websites darf der Kunde haben bzw. im Portal selbst anlegen.</dd>
+        <dt>Domain-Bereiche</dt><dd>Anzahl der Domain-Bereiche, die du ihm zuordnen kannst.</dd>
+        <dt>Mail-Domains / Postfächer</dt><dd>Anzahl Mail-Domains bzw. Postfächer. Postfächer legt der Kunde im Portal nur bis zum Limit an.</dd>
+        <dt>Postfach-Größe</dt><dd>Kontingent neuer Postfächer in MB (0 = Standard aus den Einstellungen).</dd>
+        <dt>Upload pro Datei</dt><dd>Maximale Dateigröße im Dateimanager (0 = Standard aus den Einstellungen).</dd>
+        <dt>SSL durch Kunden</dt><dd>Aus = der Kunde sieht seine Zertifikate, kann aber keine ausstellen, erzwingen oder deaktivieren.</dd>
+      </dl>
+      <ul>
+        <li>Bei allen Anzahlen gilt <strong>0 = unbegrenzt</strong>. Ohne Paket sind Mail-Domains, Postfächer und Domain-Bereiche unbegrenzt, für Websites gilt der Standard aus den Einstellungen.</li>
+        <li>„Max. Websites (Abweichung)“ beim Kunden übersteuert den Paketwert für genau diesen Kunden (-1 = laut Paket).</li>
+        <li>Beim Zuordnen im Admin wird das Limit geprüft. Wird es überschritten, fragt das Plugin nach – du kannst bewusst trotzdem zuordnen. Im Portal kann der Kunde das Limit nie überschreiten.</li>
+        <li>Paketwechsel sind jederzeit möglich. Liegt der Kunde danach über einem Limit, wird das beim Speichern und im Kundendetail rot angezeigt; bestehende Ressourcen bleiben erhalten, nur Neuanlagen im Portal sind gesperrt.</li>
+        <li>Ein Paket lässt sich erst löschen, wenn kein Kunde es mehr nutzt.</li>
+        <li>Im Kundendetail (Tab Ressourcen) siehst du den Verbrauch je Limit, der Kunde sieht Paket und Limits auf seiner Übersicht.</li>
       </ul>
 
       <h2 id="doc-bereiche">Domain-Bereiche</h2>
@@ -325,7 +356,11 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
       <label>Land <input name="country"></label>
       <label>UID-Nummer <input name="vat_id"></label>
       <label>Kundennummer <input name="customer_no" placeholder="automatisch"></label>
-      <label>Max. Websites <input name="max_sites" type="number" min="-1" placeholder="-1"><small>-1 = Standard aus Einstellungen, 0 = unbegrenzt</small></label>
+      <label class="wide">Hosting-Paket
+        <select name="package_id"><option value="">– kein Paket –</option></select>
+        <small>Legt die Limits fest (Websites, Domain-Bereiche, Mail-Domains, Postfächer, Postfach-Größe, Upload, SSL).</small>
+      </label>
+      <label>Max. Websites (Abweichung) <input name="max_sites" type="number" min="-1" placeholder="-1"><small>-1 = laut Paket, 0 = unbegrenzt</small></label>
       <label>Status
         <select name="status"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select>
       </label>
@@ -361,6 +396,30 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
     <p class="form-err" id="pf-err"></p>
     <div class="actions">
       <button type="button" class="primary" id="pf-save">Setzen</button>
+      <button type="button" data-close>Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-package">
+  <form method="dialog" id="package-form">
+    <h2 id="pk-title">Neues Paket</h2>
+    <input type="hidden" name="id">
+    <div class="grid">
+      <label class="wide">Name <input name="name" maxlength="80" placeholder="z. B. Business"></label>
+      <label class="wide">Beschreibung <textarea name="description" rows="2" maxlength="500"></textarea></label>
+      <label>Websites <input name="max_sites" type="number" min="0" value="0"></label>
+      <label>Domain-Bereiche <input name="max_domains" type="number" min="0" value="0"></label>
+      <label>Mail-Domains <input name="max_mail_domains" type="number" min="0" value="0"></label>
+      <label>Postfächer <input name="max_mailboxes" type="number" min="0" value="0"></label>
+      <label>Postfach-Größe (MB) <input name="mailbox_quota_mb" type="number" min="0" value="0"><small>0 = Standard aus Einstellungen</small></label>
+      <label>Max. Upload pro Datei (MB) <input name="max_upload_mb" type="number" min="0" value="0"><small>0 = Standard aus Einstellungen</small></label>
+      <label class="wide check"><input type="checkbox" name="ssl_allowed" checked> Kunde darf SSL-Zertifikate selbst ausstellen und verwalten</label>
+    </div>
+    <p class="hint">Bei allen Anzahlen gilt: 0 = unbegrenzt.</p>
+    <p class="form-err" id="pk-err"></p>
+    <div class="actions">
+      <button type="button" class="primary" id="pk-save">Speichern</button>
       <button type="button" data-close>Abbrechen</button>
     </div>
   </form>

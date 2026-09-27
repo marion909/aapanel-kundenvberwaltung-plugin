@@ -76,6 +76,20 @@ CREATE TABLE IF NOT EXISTS customers (
   portal_password_set_at INTEGER NOT NULL DEFAULT 0,
   portal_last_login INTEGER NOT NULL DEFAULT 0,
   max_sites INTEGER NOT NULL DEFAULT -1,
+  package_id INTEGER,
+  created_at INTEGER, updated_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS packages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  max_sites INTEGER NOT NULL DEFAULT 0,
+  max_domains INTEGER NOT NULL DEFAULT 0,
+  max_mail_domains INTEGER NOT NULL DEFAULT 0,
+  max_mailboxes INTEGER NOT NULL DEFAULT 0,
+  mailbox_quota_mb INTEGER NOT NULL DEFAULT 0,
+  max_upload_mb INTEGER NOT NULL DEFAULT 0,
+  ssl_allowed INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -110,6 +124,7 @@ _MIGRATIONS = (
     ('customers', 'portal_password_set_at', "INTEGER NOT NULL DEFAULT 0"),
     ('customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"),
     ('customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"),
+    ('customers', 'package_id', "INTEGER"),
 )
 
 
@@ -176,6 +191,47 @@ def save_cfg(cfg):
         json.dump(cfg, f, indent=2)
     os.chmod(tmp, 0o600)
     os.replace(tmp, CFG_FILE)
+
+
+# ---------- Hosting-Pakete ----------
+# Alle Limits sind Anzahlen; 0 = unbegrenzt. mailbox_quota_mb/max_upload_mb: 0 = Standard aus den Einstellungen.
+PACKAGE_INT_FIELDS = ('max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes',
+                      'mailbox_quota_mb', 'max_upload_mb')
+# Zuordnungstyp -> Paketfeld
+LIMIT_FIELD = {'site': 'max_sites', 'domain': 'max_domains', 'mail_domain': 'max_mail_domains',
+               'mailbox': 'max_mailboxes'}
+LIMIT_LABEL = {'site': 'Websites', 'domain': 'Domain-Bereiche', 'mail_domain': 'Mail-Domains',
+               'mailbox': 'Postfächer'}
+
+
+class LimitError(ValueError):
+    """Zuordnung würde ein Paket-Limit überschreiten (Admin kann bewusst übersteuern)."""
+
+
+def effective_limits(customer, package, cfg):
+    """Wirksame Limits eines Kunden. Muss mit portal/lib/packages.js übereinstimmen.
+
+    Websites: Kunden-Wert (>= 0) > Paket > Standard aus den Einstellungen.
+    Übrige Anzahlen: Paket, ohne Paket unbegrenzt (0)."""
+    cfg = cfg or {}
+    pkg = package or {}
+    own = customer.get('max_sites', -1) if customer else -1
+    own = -1 if own is None else int(own)
+    if own >= 0:
+        sites = own
+    elif package:
+        sites = int(pkg.get('max_sites') or 0)
+    else:
+        sites = int(cfg.get('site_default_max_sites') or 0)
+    return {
+        'site': sites,
+        'domain': int(pkg.get('max_domains') or 0),
+        'mail_domain': int(pkg.get('max_mail_domains') or 0),
+        'mailbox': int(pkg.get('max_mailboxes') or 0),
+        'mailbox_quota_mb': int(pkg.get('mailbox_quota_mb') or 0),
+        'upload_mb': int(pkg.get('max_upload_mb') or 0) or int(cfg.get('portal_max_upload_mb') or 512),
+        'ssl': bool(pkg.get('ssl_allowed', 1)) if package else True,
+    }
 
 
 # ---------- Branding (Logo für das Kundenportal) ----------
@@ -266,7 +322,8 @@ class Store(object):
         sql = """SELECT c.*,
                   (SELECT COUNT(*) FROM assignments a WHERE a.customer_id=c.id AND a.type='site') AS sites,
                   (SELECT COUNT(*) FROM assignments a WHERE a.customer_id=c.id AND a.type='mail_domain') AS mail_domains,
-                  (SELECT COUNT(*) FROM assignments a WHERE a.customer_id=c.id AND a.type='mailbox') AS mailboxes
+                  (SELECT COUNT(*) FROM assignments a WHERE a.customer_id=c.id AND a.type='mailbox') AS mailboxes,
+                  (SELECT p.name FROM packages p WHERE p.id=c.package_id) AS package_name
                  FROM customers c"""
         args = ()
         if search:
@@ -304,6 +361,14 @@ class Store(object):
                 vals['max_sites'] = max(-1, int(data.get('max_sites')))
             except (TypeError, ValueError):
                 raise ValueError('Max. Websites muss eine Zahl sein (-1 = Standard, 0 = unbegrenzt)')
+        if 'package_id' in data:
+            pid = str(data.get('package_id') or '').strip()
+            if pid:
+                if not self.get_package(int(pid)):
+                    raise ValueError('Paket nicht gefunden')
+                vals['package_id'] = int(pid)
+            else:
+                vals['package_id'] = None
         no = str(data.get('customer_no', '') or '').strip()
         cid = data.get('id')
         if cid:
@@ -420,9 +485,12 @@ class Store(object):
             m[(r['type'], r['ref_name'])] = {'customer_id': r['customer_id'], 'customer_no': r['customer_no'], 'label': label}
         return m
 
-    def assign(self, cid, items):
-        if not self.get_customer(cid):
+    def assign(self, cid, items, cfg=None, enforce_limits=False):
+        customer = self.get_customer(cid)
+        if not customer:
             raise ValueError('Kunde nicht gefunden')
+        if enforce_limits:
+            self.check_limits(customer, items, cfg)
         now = int(time.time())
         added, skipped = [], []
         for it in items:
@@ -442,14 +510,14 @@ class Store(object):
         self.db.commit()
         return added, skipped
 
-    def assign_domain(self, cid, domain):
+    def assign_domain(self, cid, domain, cfg=None, enforce_limits=False):
         """Domain-Bereich zuordnen: der Kunde darf darin Websites und Subdomains anlegen."""
         d = normalize_domain(domain)
         for r in self.db.execute("SELECT customer_id, ref_name FROM assignments WHERE type='domain'"):
             other = r['ref_name']
             if r['customer_id'] != cid and (d == other or d.endswith('.' + other) or other.endswith('.' + d)):
                 raise ValueError('{} überschneidet sich mit dem Domain-Bereich {} eines anderen Kunden'.format(d, other))
-        added, skipped = self.assign(cid, [{'type': 'domain', 'ref_name': d}])
+        added, skipped = self.assign(cid, [{'type': 'domain', 'ref_name': d}], cfg, enforce_limits)
         if not added:
             raise ValueError('Domain-Bereich {} ist bereits zugeordnet'.format(d))
         return d
@@ -462,6 +530,93 @@ class Store(object):
         self.log('unassign', r['customer_id'], '{}: {}'.format(r['type'], r['ref_name']))
         self.db.commit()
         return dict(r)
+
+    # ---------- Pakete ----------
+    def list_packages(self):
+        rows = self.db.execute("""SELECT p.*, (SELECT COUNT(*) FROM customers c WHERE c.package_id=p.id) AS customers
+                                  FROM packages p ORDER BY p.name COLLATE NOCASE""")
+        return [dict(r) for r in rows]
+
+    def get_package(self, pid):
+        r = self.db.execute('SELECT * FROM packages WHERE id=?', (pid,)).fetchone()
+        return dict(r) if r else None
+
+    def save_package(self, data):
+        name = str(data.get('name') or '').strip()[:80]
+        if not name:
+            raise ValueError('Paketname ist erforderlich')
+        vals = {'name': name, 'description': str(data.get('description') or '').strip()[:500]}
+        for k in PACKAGE_INT_FIELDS:
+            raw = str(data.get(k, 0) if data.get(k) is not None else 0).strip() or '0'
+            try:
+                v = int(raw)
+            except ValueError:
+                raise ValueError('{} muss eine Zahl sein'.format(k))
+            if v < 0:
+                raise ValueError('Limits dürfen nicht negativ sein (0 = unbegrenzt)')
+            vals[k] = v
+        vals['ssl_allowed'] = 1 if data.get('ssl_allowed', True) not in (False, 0, '0', 'false', '') else 0
+        now = int(time.time())
+        pid = data.get('id')
+        dup = self.db.execute('SELECT id FROM packages WHERE name=? COLLATE NOCASE AND id<>?',
+                              (name, int(pid or 0))).fetchone()
+        if dup:
+            raise ValueError('Ein Paket mit diesem Namen existiert bereits')
+        if pid:
+            pid = int(pid)
+            if not self.get_package(pid):
+                raise ValueError('Paket nicht gefunden')
+            sets = ', '.join('{}=?'.format(k) for k in vals)
+            self.db.execute('UPDATE packages SET {}, updated_at=? WHERE id=?'.format(sets), tuple(vals.values()) + (now, pid))
+        else:
+            cols = ', '.join(vals)
+            cur = self.db.execute('INSERT INTO packages ({}, created_at, updated_at) VALUES ({}, ?, ?)'.format(
+                cols, ', '.join('?' for _ in vals)), tuple(vals.values()) + (now, now))
+            pid = cur.lastrowid
+        self.db.commit()
+        return pid
+
+    def delete_package(self, pid):
+        n = self.db.execute('SELECT COUNT(*) FROM customers WHERE package_id=?', (pid,)).fetchone()[0]
+        if n:
+            raise ValueError('Das Paket ist noch {} Kunde(n) zugewiesen. Bitte zuerst ein anderes Paket zuweisen.'.format(n))
+        self.db.execute('DELETE FROM packages WHERE id=?', (pid,))
+        self.db.commit()
+
+    def usage(self, cid):
+        counts = {t: 0 for t in LIMIT_FIELD}
+        for r in self.db.execute('SELECT type, COUNT(*) AS n FROM assignments WHERE customer_id=? GROUP BY type', (cid,)):
+            if r['type'] in counts:
+                counts[r['type']] = r['n']
+        return counts
+
+    def limits(self, customer, cfg=None):
+        pkg = self.get_package(customer['package_id']) if customer.get('package_id') else None
+        return effective_limits(customer, pkg, cfg), pkg
+
+    def check_limits(self, customer, items, cfg=None):
+        """Wirft LimitError, wenn die neuen Zuordnungen ein Limit überschreiten würden."""
+        lim, _ = self.limits(customer, cfg)
+        used = self.usage(customer['id'])
+        extra = {}
+        for it in items:
+            t = it.get('type')
+            name = str(it.get('ref_name', '')).strip().lower()
+            if t in LIMIT_FIELD and not self.db.execute(
+                    'SELECT 1 FROM assignments WHERE type=? AND ref_name=?', (t, name)).fetchone():
+                extra[t] = extra.get(t, 0) + 1
+        over = []
+        for t, n in extra.items():
+            if lim[t] and used[t] + n > lim[t]:
+                over.append('{}: {} von {} erlaubt, danach {}'.format(LIMIT_LABEL[t], used[t], lim[t], used[t] + n))
+        if over:
+            raise LimitError('Paket-Limit überschritten – ' + '; '.join(over))
+
+    def over_limits(self, customer, cfg=None):
+        """Liste der aktuell überschrittenen Limits (z. B. nach einem Paketwechsel)."""
+        lim, _ = self.limits(customer, cfg)
+        used = self.usage(customer['id'])
+        return ['{}: {} von {}'.format(LIMIT_LABEL[t], used[t], lim[t]) for t in LIMIT_FIELD if lim[t] and used[t] > lim[t]]
 
     # ---------- Log ----------
     def log(self, action, cid, detail=''):

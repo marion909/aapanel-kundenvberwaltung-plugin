@@ -42,7 +42,7 @@ module.exports = function registerSiteRoutes(app, { loginRequired, ownedAssignme
   }
 
   function fileManager(svc, site) {
-    const mb = Number(svc.cfg.portal_max_upload_mb) || 512;
+    const mb = svc.limits().upload_mb;
     return new FileManager(svc.siteRoot(site), mb * 1024 * 1024);
   }
 
@@ -160,7 +160,7 @@ module.exports = function registerSiteRoutes(app, { loginRequired, ownedAssignme
         if (tab === 'files') {
           const fm = fileManager(svc, site);
           data.listing = fm.list(req.query.path || '/');
-          data.maxUploadMb = Number(svc.cfg.portal_max_upload_mb) || 512;
+          data.maxUploadMb = svc.limits().upload_mb;
         }
       } catch (e) {
         if (!isUserError(e)) throw e;
