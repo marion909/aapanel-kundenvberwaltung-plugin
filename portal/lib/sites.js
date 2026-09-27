@@ -137,10 +137,20 @@ class SiteService {
     return h;
   }
 
+  limits() {
+    if (!this._limits) {
+      const { effectiveLimits } = require('./packages');
+      this._limits = effectiveLimits(this.customer, this.store.getPackage(this.customer.package_id), this.cfg);
+    }
+    return this._limits;
+  }
+
   maxSites() {
-    const own = Number(this.customer.max_sites);
-    if (Number.isInteger(own) && own >= 0) return own;
-    return Number(this.cfg.site_default_max_sites) || 0;
+    return this.limits().site;
+  }
+
+  requireSsl() {
+    if (!this.limits().ssl) throw new ValidationError('SSL-Zertifikate werden in Ihrem Paket vom Administrator verwaltet.');
   }
 
   quota() {
@@ -254,7 +264,9 @@ class SiteService {
         notes.push(String(e.message || e));
       }
     }
-    if (ssl) {
+    if (ssl && !this.limits().ssl) {
+      notes.push('SSL-Zertifikate werden in Ihrem Paket vom Administrator ausgestellt.');
+    } else if (ssl) {
       try {
         await this.sslLetsEncrypt({ id: siteId, name: host });
         notes.push("Let's-Encrypt-Zertifikat wurde ausgestellt.");
@@ -355,6 +367,7 @@ class SiteService {
   }
 
   async sslLetsEncrypt(site) {
+    this.requireSsl();
     const domains = (await this.siteDomains(site)).map((d) => d.name);
     if (!domains.length) throw new ValidationError('Keine Domains für das Zertifikat.');
     const res = await this.call('acme', 'apply_cert_api', {
@@ -368,11 +381,13 @@ class SiteService {
   }
 
   async sslForceHttps(site, enabled) {
+    this.requireSsl();
     await this.call('site', enabled ? 'HttpToHttps' : 'CloseToHttps', { siteName: site.name });
     this.log('ssl_force_https', { site: site.name, enabled: !!enabled });
   }
 
   async sslDisable(site) {
+    this.requireSsl();
     await this.call('site', 'CloseSSLConf', { updateOf: 1, siteName: site.name });
     this.log('ssl_disable', site.name);
   }

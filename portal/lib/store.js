@@ -36,6 +36,7 @@ const DEFAULT_CFG = {
   cf_proxied: false,
   server_ipv4: '',
   server_ipv6: '',
+  portal_name: 'KundenPortal',
 };
 
 const PBKDF2_ITERATIONS = 600000; // muss mit cm_store.py übereinstimmen (Cross-Language-Hash-Kompatibilität)
@@ -76,6 +77,20 @@ CREATE TABLE IF NOT EXISTS customers (
   portal_password_set_at INTEGER NOT NULL DEFAULT 0,
   portal_last_login INTEGER NOT NULL DEFAULT 0,
   max_sites INTEGER NOT NULL DEFAULT -1,
+  package_id INTEGER,
+  created_at INTEGER, updated_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS packages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  max_sites INTEGER NOT NULL DEFAULT 0,
+  max_domains INTEGER NOT NULL DEFAULT 0,
+  max_mail_domains INTEGER NOT NULL DEFAULT 0,
+  max_mailboxes INTEGER NOT NULL DEFAULT 0,
+  mailbox_quota_mb INTEGER NOT NULL DEFAULT 0,
+  max_upload_mb INTEGER NOT NULL DEFAULT 0,
+  ssl_allowed INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -108,6 +123,7 @@ const MIGRATIONS = [
   ['customers', 'portal_password_set_at', "INTEGER NOT NULL DEFAULT 0"],
   ['customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"],
   ['customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"],
+  ['customers', 'package_id', 'INTEGER'],
 ];
 
 function columnExists(db, table, col) {
@@ -227,6 +243,19 @@ class Store {
     return this.db.prepare('SELECT * FROM assignments WHERE customer_id=? ORDER BY type, ref_name').all(cid);
   }
 
+  getPackage(pid) {
+    if (!pid) return null;
+    return this.db.prepare('SELECT * FROM packages WHERE id=?').get(pid) || null;
+  }
+
+  usage(cid) {
+    const counts = { site: 0, domain: 0, mail_domain: 0, mailbox: 0 };
+    for (const r of this.db.prepare('SELECT type, COUNT(*) AS n FROM assignments WHERE customer_id=? GROUP BY type').all(cid)) {
+      if (r.type in counts) counts[r.type] = r.n;
+    }
+    return counts;
+  }
+
   // Domain-Bereiche des Kunden (darin darf er Websites/Subdomains anlegen)
   domains(cid) {
     return this.db
@@ -289,4 +318,22 @@ class Store {
   }
 }
 
-module.exports = { Store, loadCfg, saveCfg, hashPassword, verifyPassword, DB_FILE, CFG_FILE, DATA_DIR };
+// Logo aus der Kundenverwaltung (vom Python-Admin-Plugin gespeichert, siehe cm_store.save_logo)
+const LOGO_TYPES = {
+  png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+};
+
+function logoFile() {
+  for (const ext of Object.keys(LOGO_TYPES)) {
+    const p = path.join(DATA_DIR, `logo.${ext}`);
+    try {
+      const st = fs.statSync(p);
+      if (st.isFile()) return { path: p, type: LOGO_TYPES[ext], mtime: Math.floor(st.mtimeMs), size: st.size };
+    } catch (e) {
+      // nächste Endung
+    }
+  }
+  return null;
+}
+
+module.exports = { logoFile, Store, loadCfg, saveCfg, hashPassword, verifyPassword, DB_FILE, CFG_FILE, DATA_DIR };

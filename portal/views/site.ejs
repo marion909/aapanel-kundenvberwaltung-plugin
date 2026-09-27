@@ -108,13 +108,17 @@
   <% } else { %>
   <p class="empty">Für diese Website ist kein Zertifikat aktiv.</p>
   <% } %>
+  <% if (!limits.ssl) { %>
+  <p class="hint">SSL-Zertifikate werden in Ihrem Paket vom Administrator ausgestellt und verwaltet. Bitte wenden Sie sich bei Bedarf an uns.</p>
+  <% } else { %>
   <form method="post" action="/sites/<%= row.id %>/ssl/letsencrypt" class="inline" data-busy="Zertifikat wird beantragt – das kann bis zu einer Minute dauern …">
     <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
     <button type="submit" class="primary"><%= ssl.enabled ? "Let's-Encrypt-Zertifikat erneuern" : "Let's-Encrypt-Zertifikat ausstellen" %></button>
   </form>
   <p class="hint">Alle Domains der Website müssen per DNS auf diesen Server zeigen. Das Zertifikat wird automatisch verlängert.</p>
+  <% } %>
 </section>
-<% if (ssl.enabled) { %>
+<% if (ssl.enabled && limits.ssl) { %>
 <section class="box">
   <h2>HTTPS erzwingen</h2>
   <form method="post" action="/sites/<%= row.id %>/ssl/force" class="inline">

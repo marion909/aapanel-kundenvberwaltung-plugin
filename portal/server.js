@@ -20,6 +20,7 @@ const cookieSession = require('cookie-session');
 const store = require('./lib/store');
 const { ApiError } = require('./lib/api');
 const resources = require('./lib/resources');
+const { effectiveLimits } = require('./lib/packages');
 
 const cfgAtBoot = store.loadCfg();
 if (!cfgAtBoot.portal_secret_key) {
@@ -131,6 +132,30 @@ app.use((req, res, next) => {
   next();
 });
 
+// Branding (Portal-Name + Logo aus der Kundenverwaltung) für alle Seiten
+app.use((req, res, next) => {
+  const cfg = store.loadCfg();
+  const logo = store.logoFile();
+  res.locals.branding = {
+    name: String(cfg.portal_name || '').trim() || 'KundenPortal',
+    logoUrl: logo ? `/branding/logo?v=${logo.mtime}` : null,
+  };
+  next();
+});
+
+// Logo ist öffentlich (auch auf der Login-Seite sichtbar). Strikte CSP, damit
+// ein SVG beim direkten Aufruf keine Skripte ausführen kann.
+app.get('/branding/logo', (req, res) => {
+  const logo = store.logoFile();
+  if (!logo) return res.status(404).end();
+  res.set('Content-Type', logo.type);
+  res.set('Content-Length', String(logo.size));
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox");
+  res.set('X-Content-Type-Options', 'nosniff');
+  require('fs').createReadStream(logo.path).pipe(res);
+});
+
 app.use((req, res, next) => {
   res.locals.currentPath = req.path;
   res.set('X-Content-Type-Options', 'nosniff');
@@ -148,6 +173,12 @@ function loginRequired(req, res, next) {
   }
   req.customer = customer;
   res.locals.customer = customer;
+  // Hosting-Paket und wirksame Limits (für Durchsetzung und Anzeige)
+  const pkg = req.store.getPackage(customer.package_id);
+  req.package = pkg;
+  req.limits = effectiveLimits(customer, pkg, store.loadCfg());
+  res.locals.pkg = pkg;
+  res.locals.limits = req.limits;
   next();
 }
 
@@ -226,7 +257,7 @@ app.get(
     const idx = await liveIndex(cfg);
     resources.annotateAssignments(domains, idx);
     resources.annotateAssignments(boxes, idx);
-    res.render('mail', { title: 'E-Mail', domains, boxes });
+    res.render('mail', { title: 'E-Mail', domains, boxes, usage: req.store.usage(req.customer.id) });
   })
 );
 
@@ -242,10 +273,16 @@ app.post(
       flash(req, 'Postfachname und Passwort sind erforderlich.', 'error');
       return res.redirect('/mail');
     }
+    const max = req.limits.mailbox;
+    const used = req.store.usage(req.customer.id).mailbox;
+    if (max && used >= max) {
+      flash(req, `Postfach-Limit Ihres Pakets erreicht (${used} von ${max}).`, 'error');
+      return res.redirect('/mail');
+    }
     const full = `${local}@${domain}`;
     const cfg = store.loadCfg();
     const api = resources.makeApi(cfg);
-    const quota = cfg.mail_box_default_quota || '1024 MB';
+    const quota = req.limits.mailbox_quota_mb ? `${req.limits.mailbox_quota_mb} MB` : cfg.mail_box_default_quota || '1024 MB';
     const fullName = req.customer.company ||
       `${req.customer.first_name || ''} ${req.customer.last_name || ''}`.trim() || local;
     try {
@@ -280,7 +317,8 @@ app.post(
     // Werte übernehmen, damit Kontingent/Anzeigename/Status nicht zurückgesetzt werden.
     const idx = await liveIndex(cfg);
     const info = idx ? idx.get(`mailbox\u0000${row.ref_name}`) : null;
-    const quota = normalizeQuota(info && info.quota, cfg.mail_box_default_quota || '1024 MB');
+    const fallbackQuota = req.limits.mailbox_quota_mb ? `${req.limits.mailbox_quota_mb} MB` : cfg.mail_box_default_quota || '1024 MB';
+    const quota = normalizeQuota(info && info.quota, fallbackQuota);
     const fullName = (info && info.full_name) || row.ref_name.split('@')[0];
     const active = info && info.active !== undefined ? info.active : 1;
     try {

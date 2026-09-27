@@ -60,6 +60,7 @@
     $$('.view').forEach((s) => { s.hidden = s.id !== 'view-' + v; });
     if (v === 'resources') loadResources(false);
     if (v === 'settings') loadSettings();
+    if (v === 'packages') loadPackages();
   }
 
   $$('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
@@ -89,7 +90,7 @@
       <li class="${c.status === 'inactive' ? 'off' : ''}">
         <button type="button" data-id="${c.id}" class="${state.current === c.id ? 'on' : ''}">
           <span class="n">${esc(custName(c))}</span>
-          <span class="sub"><span>${esc(c.customer_no)}</span>
+          <span class="sub"><span>${esc(c.customer_no)}${c.package_name ? ' · ' + esc(c.package_name) : ''}</span>
             <span>${c.sites} Web · ${c.mail_domains} Mail · ${c.mailboxes} Postf.</span></span>
         </button>
       </li>`).join('');
@@ -112,12 +113,12 @@
   }
 
   function renderDetail() {
-    const { customer: c, assignments, log, warning } = state.detail;
+    const { customer: c, assignments, log, warning, package: pinfo } = state.detail;
     const tab = state.tab;
     $('#detail').innerHTML = `
       <div class="chead">
         <div>
-          <h2>${esc(custName(c))}<span class="badge ${c.status}">${c.status === 'active' ? 'Aktiv' : 'Inaktiv'}</span></h2>
+          <h2>${esc(custName(c))}<span class="badge ${c.status}">${c.status === 'active' ? 'Aktiv' : 'Inaktiv'}</span>${pinfo && pinfo.package ? '<span class="badge pkg">' + esc(pinfo.package.name) + '</span>' : ''}</h2>
           <div class="no">${esc(c.customer_no)}${c.email ? ' · ' + esc(c.email) : ''}</div>
         </div>
         <div class="btns">
@@ -140,6 +141,7 @@
     const body = $('#tab-body');
     if (tab === 'resources') {
       let html = warning ? `<div class="warn">Live-Status nicht verfügbar: ${esc(warning)}</div>` : '';
+      html += usageHtml(pinfo);
       if (!assignments.length) {
         html += '<div class="empty"><p>Diesem Kunden sind noch keine Websites, Mail-Domains oder Postfächer zugeordnet.</p></div>';
       } else {
@@ -159,7 +161,8 @@
         ${f('E-Mail', c.email)}${f('Telefon', c.phone)}
         ${f('Adresse', [c.street, [c.zip, c.city].filter(Boolean).join(' '), c.country].filter(Boolean).join(', '))}
         ${f('UID-Nummer', c.vat_id)}${f('Kundennummer', c.customer_no)}
-        ${f('Max. Websites', c.max_sites === -1 || c.max_sites == null ? 'Standard' : (c.max_sites === 0 ? 'unbegrenzt' : c.max_sites))}
+        ${f('Hosting-Paket', pinfo && pinfo.package ? pinfo.package.name : 'kein Paket')}
+        ${f('Max. Websites', c.max_sites === -1 || c.max_sites == null ? 'laut Paket' : (c.max_sites === 0 ? 'unbegrenzt' : c.max_sites))}
         ${f('Angelegt', c.created_at ? fmtTime(c.created_at) : '')}
         ${f('Notiz', c.note, 'wide')}
         </dl>
@@ -238,9 +241,12 @@
   // ---------- Kunde anlegen/bearbeiten ----------
   $('#btn-new').addEventListener('click', () => openCustomerForm(null));
 
-  function openCustomerForm(c) {
+  async function openCustomerForm(c) {
     const f = $('#customer-form');
     f.reset();
+    try { await fetchPackages(); } catch (e) { /* Liste bleibt leer */ }
+    f.elements.package_id.innerHTML = '<option value="">– kein Paket –</option>' +
+      state.packages.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
     $('#cf-err').textContent = '';
     $('#cf-title').textContent = c ? 'Kunde bearbeiten' : 'Neuer Kunde';
     if (c) Object.keys(c).forEach((k) => { if (f.elements[k]) f.elements[k].value = c[k] == null ? '' : c[k]; });
@@ -277,6 +283,17 @@
     loadCustomers();
   }
 
+  // Paket-Limit überschritten -> Admin fragen, ob trotzdem zugeordnet werden soll
+  async function withLimitOverride(call) {
+    try {
+      return await call(false);
+    } catch (e) {
+      if (!/^Paket-Limit/.test(e.message)) throw e;
+      if (!confirm(e.message + '\n\nTrotzdem zuordnen? (Das Limit gilt weiterhin für Aktionen des Kunden im Portal.)')) throw new Error('Abgebrochen');
+      return call(true);
+    }
+  }
+
   // ---------- Domain-Bereich ----------
   function openDomainDialog() {
     const f = $('#domain-form');
@@ -289,7 +306,7 @@
   $('#df-save').addEventListener('click', async () => {
     const f = $('#domain-form');
     try {
-      const r = await api('assign_domain', { payload: { customer_id: state.current, domain: f.elements.domain.value.trim() } });
+      const r = await withLimitOverride((force) => api('assign_domain', { payload: { customer_id: state.current, domain: f.elements.domain.value.trim(), force } }));
       $('#dlg-domain').close();
       toast(r.msg);
       state.tab = 'resources';
@@ -392,13 +409,111 @@
     if (!items.length) return;
     $('#assign-save').disabled = true;
     try {
-      const r = await api('assign', { payload: { customer_id: state.current, items } });
+      const r = await withLimitOverride((force) => api('assign', { payload: { customer_id: state.current, items, force } }));
       $('#dlg-assign').close();
       toast(r.msg);
       state.tab = 'resources';
       openCustomer(state.current, true);
       loadCustomers();
     } catch (e) { toast(e.message, true); updateCount(); }
+  });
+
+  // ---------- Pakete ----------
+  state.packages = [];
+  async function fetchPackages() {
+    const r = await api('get_packages');
+    state.packages = r.data || [];
+    return state.packages;
+  }
+
+  const lim = (v) => (Number(v) ? String(v) : '∞');
+
+  function usageHtml(pinfo) {
+    if (!pinfo) return '';
+    const L = pinfo.limits || {};
+    const U = pinfo.usage || {};
+    const rows = [['site', 'Websites'], ['domain', 'Domain-Bereiche'], ['mail_domain', 'Mail-Domains'], ['mailbox', 'Postfächer']];
+    const items = rows.map(([k, label]) => {
+      const max = Number(L[k]) || 0;
+      const used = Number(U[k]) || 0;
+      const pct = max ? Math.min(100, Math.round((used / max) * 100)) : 0;
+      const cls = max && used > max ? 'over' : max && used >= max ? 'full' : '';
+      return `<div class="use ${cls}"><span class="k">${label}</span><strong>${used}<small> / ${lim(max)}</small></strong>
+        <span class="ubar"><span style="width:${max ? Math.max(pct, used ? 4 : 0) : 0}%"></span></span></div>`;
+    }).join('');
+    const extra = [];
+    if (L.mailbox_quota_mb) extra.push('Postfach-Größe ' + L.mailbox_quota_mb + ' MB');
+    if (L.upload_mb) extra.push('Upload bis ' + L.upload_mb + ' MB');
+    extra.push(L.ssl === false ? 'SSL: nur durch Admin' : 'SSL: durch Kunden');
+    const head = pinfo.package ? 'Paket <strong>' + esc(pinfo.package.name) + '</strong>' : 'Kein Paket zugewiesen – nur das Website-Standardlimit gilt';
+    const over = (pinfo.over || []).length ? `<div class="warn">Limits überschritten: ${pinfo.over.map(esc).join('; ')}</div>` : '';
+    return `<div class="usage"><div class="usage-head">${head}<span class="meta">${extra.map(esc).join(' · ')}</span></div>
+      <div class="usage-grid">${items}</div>${over}</div>`;
+  }
+
+  async function loadPackages() {
+    const out = $('#package-list');
+    out.innerHTML = '<div class="loading">Lade Pakete …</div>';
+    try {
+      const list = await fetchPackages();
+      if (!list.length) {
+        out.innerHTML = '<div class="empty"><p>Noch keine Pakete angelegt. Lege z. B. „Starter“, „Business“ und „Pro“ an und weise sie den Kunden unter „Bearbeiten“ zu.</p></div>';
+        return;
+      }
+      out.innerHTML = '<div class="pkg-grid">' + list.map((p) => `
+        <div class="pkg-card">
+          <div class="pkg-head"><h3>${esc(p.name)}</h3><span class="meta">${p.customers} Kunde${p.customers === 1 ? '' : 'n'}</span></div>
+          ${p.description ? '<p class="hint">' + esc(p.description) + '</p>' : ''}
+          <dl class="pkg-limits">
+            <dt>Websites</dt><dd>${lim(p.max_sites)}</dd>
+            <dt>Domain-Bereiche</dt><dd>${lim(p.max_domains)}</dd>
+            <dt>Mail-Domains</dt><dd>${lim(p.max_mail_domains)}</dd>
+            <dt>Postfächer</dt><dd>${lim(p.max_mailboxes)}</dd>
+            <dt>Postfach-Größe</dt><dd>${p.mailbox_quota_mb ? p.mailbox_quota_mb + ' MB' : 'Standard'}</dd>
+            <dt>Upload pro Datei</dt><dd>${p.max_upload_mb ? p.max_upload_mb + ' MB' : 'Standard'}</dd>
+            <dt>SSL durch Kunden</dt><dd>${p.ssl_allowed ? 'ja' : 'nein'}</dd>
+          </dl>
+          <div class="actions"><button type="button" data-edit="${p.id}">Bearbeiten</button>
+            <button type="button" class="danger" data-del="${p.id}">Löschen</button></div>
+        </div>`).join('') + '</div>';
+      $$('button[data-edit]', out).forEach((b) => b.addEventListener('click', () =>
+        openPackageForm(state.packages.find((p) => p.id === +b.dataset.edit))));
+      $$('button[data-del]', out).forEach((b) => b.addEventListener('click', async () => {
+        const p = state.packages.find((x) => x.id === +b.dataset.del);
+        if (!confirm('Paket „' + p.name + '“ löschen?')) return;
+        try { const r = await api('delete_package', { id: p.id }); toast(r.msg); loadPackages(); }
+        catch (e) { toast(e.message, true); }
+      }));
+    } catch (e) { out.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+  }
+
+  function openPackageForm(p) {
+    const f = $('#package-form');
+    f.reset();
+    $('#pk-err').textContent = '';
+    $('#pk-title').textContent = p ? 'Paket bearbeiten' : 'Neues Paket';
+    f.elements.id.value = p ? p.id : '';
+    if (p) {
+      ['name', 'description', 'max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes', 'mailbox_quota_mb', 'max_upload_mb']
+        .forEach((k) => { f.elements[k].value = p[k] == null ? '' : p[k]; });
+      f.elements.ssl_allowed.checked = !!p.ssl_allowed;
+    }
+    $('#dlg-package').showModal();
+    f.elements.name.focus();
+  }
+
+  $('#btn-new-package').addEventListener('click', () => openPackageForm(null));
+  $('#pk-save').addEventListener('click', async () => {
+    const f = $('#package-form');
+    const data = Object.fromEntries(new FormData(f).entries());
+    data.ssl_allowed = f.elements.ssl_allowed.checked;
+    if (!data.id) delete data.id;
+    try {
+      const r = await api('save_package', { payload: data });
+      $('#dlg-package').close();
+      toast(r.msg);
+      loadPackages();
+    } catch (e) { $('#pk-err').textContent = e.message; }
   });
 
   // ---------- Alle Ressourcen ----------
@@ -475,10 +590,11 @@
       const f = $('#settings-form');
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
        'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix',
-       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6']
+       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6', 'portal_name']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
       ['site_default_max_sites', 'portal_max_upload_mb'].forEach((k) => { f.elements[k].value = s[k] == null ? '' : s[k]; });
       f.elements.cf_proxied.checked = !!s.cf_proxied;
+      renderLogo(s.logo_data_url);
       f.elements.cf_api_key.value = '';
       $('#cf-key-hint').textContent = s.cf_api_key_set ? 'Hinterlegt. Nur ausfüllen, um ihn zu ändern.' : 'Kein Key hinterlegt – DNS-Einträge müssen dann manuell gesetzt werden.';
       $('#mailbox-methods-warn').innerHTML = s.mail_box_actions_configured ? '' :
@@ -503,6 +619,43 @@
     data.mail_db_fallback = f.elements.mail_db_fallback.checked;
     data.cf_proxied = f.elements.cf_proxied.checked;
     try { const r = await api('save_settings', { payload: data }); toast(r.msg); loadSettings(); }
+    catch (e) { toast(e.message, true); }
+  });
+
+  // ---------- Logo fürs Kundenportal ----------
+  function renderLogo(url) {
+    const box = $('#logo-preview');
+    box.innerHTML = '';
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Logo';
+      box.appendChild(img);
+    } else {
+      box.innerHTML = '<span class="hint">Kein Logo hinterlegt</span>';
+    }
+    $('#logo-remove').hidden = !url;
+  }
+
+  $('#logo-file').addEventListener('change', (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    if (file.size > 1024 * 1024) return toast('Logo ist zu groß (max. 1 MB)', true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const r = await api('save_logo', { payload: { data: reader.result } });
+        toast(r.msg);
+        renderLogo(reader.result);
+      } catch (e) { toast(e.message, true); }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $('#logo-remove').addEventListener('click', async () => {
+    if (!confirm('Logo wirklich entfernen? Im Kundenportal wird dann wieder der Portal-Name angezeigt.')) return;
+    try { const r = await api('remove_logo'); toast(r.msg); renderLogo(''); }
     catch (e) { toast(e.message, true); }
   });
 

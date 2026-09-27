@@ -36,6 +36,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .side { width: 190px; flex: 0 0 190px; background: var(--side); color: var(--side-text); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
 .side .brand { display: block; background: var(--side-dark); color: #fff; font-size: 21px; padding: 12px 18px; text-decoration: none; letter-spacing: .2px; }
 .side .brand span { color: var(--accent); }
+.side .brand.has-logo { padding: 10px 16px; line-height: 0; }
+.side .brand img { max-width: 100%; max-height: 44px; object-fit: contain; }
+.login-logo { background: var(--side); margin: -28px -26px 18px; padding: 18px 20px; border-radius: 10px 10px 0 0; text-align: center; line-height: 0; }
+.login-logo img { max-width: 100%; max-height: 60px; object-fit: contain; }
 .side nav { display: flex; flex-direction: column; padding: 4px 0; flex: 1; overflow-y: auto; }
 .side nav a, .side-logout button { display: flex; align-items: center; gap: 12px; padding: 11px 18px; color: var(--side-text); text-decoration: none; font-size: 14px; border: 0; border-radius: 0; background: none; width: 100%; text-align: left; }
 .side nav a:hover, .side-logout button:hover { background: var(--side-dark); color: #fff; }
@@ -195,6 +199,7 @@ code { background: var(--bg); border: 1px solid var(--border); border-radius: 4p
   .side { width: auto; flex: none; height: auto; position: sticky; top: 0; z-index: 20; }
   .side-top { display: flex; align-items: center; background: var(--side-dark); }
   .side .brand { flex: 1; font-size: 19px; padding: 12px 16px; }
+  .side .brand img { max-height: 34px; }
   .menu-toggle { display: flex !important; }
   .side nav, .side-logout { display: none; }
   .side.open nav, .side.open .side-logout { display: flex; }

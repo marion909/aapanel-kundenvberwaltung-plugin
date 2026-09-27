@@ -1,5 +1,8 @@
 <%- include('partials/header') %>
-<h1>E-Mail</h1>
+<div class="head-row">
+  <h1>E-Mail</h1>
+  <span class="hint"><%= usage.mailbox %> von <%= limits.mailbox ? limits.mailbox : 'unbegrenzt' %> Postfächern<% if (limits.mailbox_quota_mb) { %> · je <%= limits.mailbox_quota_mb %> MB<% } %></span>
+</div>
 
 <h2>Mail-Domains</h2>
 <% if (!domains.length) { %>
@@ -11,6 +14,10 @@
 <% }) %>
 </ul>
 
+<% if (limits.mailbox && usage.mailbox >= limits.mailbox) { %>
+<h2>Neues Postfach anlegen</h2>
+<p class="empty">Postfach-Limit Ihres Pakets erreicht (<%= usage.mailbox %> von <%= limits.mailbox %>).</p>
+<% } else { %>
 <h2>Neues Postfach anlegen</h2>
 <form method="post" action="/mail/boxes" class="inline">
   <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
@@ -24,6 +31,7 @@
   <input type="password" name="password" placeholder="Passwort (min. 8 Zeichen)" required minlength="8">
   <button type="submit" class="primary">Anlegen</button>
 </form>
+<% } %>
 <% } %>
 
 <h2>Postfächer</h2>

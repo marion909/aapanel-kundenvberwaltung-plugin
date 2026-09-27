@@ -14,7 +14,7 @@
           <td><%= has ? (ssl.issuer || '') : '' %></td>
           <td><%= has ? ssl.notAfter : '' %></td>
           <td><% if (has) { %><span class="badge <%= ssl.endtime < 14 ? 'warn' : 'on' %>"><%= ssl.endtime %> Tage</span><% } else if (s.state === 'ok') { %><span class="badge off">kein Zertifikat</span><% } else if (s.state === 'missing') { %><span class="badge warn">nicht vorhanden</span><% } %></td>
-          <td class="actions"><% if (s.state !== 'missing') { %><a class="btn small" href="/sites/<%= s.id %>/ssl"><%= has ? 'Verwalten' : 'Zertifikat ausstellen' %></a><% } %></td>
+          <td class="actions"><% if (s.state !== 'missing') { %><a class="btn small" href="/sites/<%= s.id %>/ssl"><%= has || !limits.ssl ? 'Details' : 'Zertifikat ausstellen' %></a><% } %></td>
         </tr>
       <% }) %>
       </tbody>

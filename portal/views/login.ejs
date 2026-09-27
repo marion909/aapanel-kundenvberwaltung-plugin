@@ -1,6 +1,7 @@
 <%- include('partials/header') %>
 <div class="login-box">
-  <h1>Kundenportal</h1>
+  <% if (branding.logoUrl) { %><div class="login-logo"><img src="<%= branding.logoUrl %>" alt="<%= branding.name %>"></div><% } %>
+  <h1><%= branding.name %></h1>
   <form method="post">
     <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
     <label>Kundennummer

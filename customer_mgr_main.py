@@ -2,7 +2,7 @@
 # coding: utf-8
 # aaPanel-Plugin: Kundenverwaltung
 # Klassenname muss dem Dateinamen entsprechen.
-import os, sys, json, time, traceback, functools
+import base64, os, sys, json, time, traceback, functools
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir('/www/server/panel')
@@ -138,7 +138,19 @@ class customer_mgr_main:
         except Exception as e:
             warn = str(e)
         cm_resources.annotate_assignments(asg, live)
-        return _ok({'customer': c, 'assignments': asg, 'log': log, 'warning': warn})
+        return _ok({'customer': c, 'assignments': asg, 'log': log, 'warning': warn,
+                    'package': self._package_info(c)})
+
+    @staticmethod
+    def _package_info(c):
+        cfg = cm_store.load_cfg()
+        st = cm_store.Store()
+        try:
+            limits, pkg = st.limits(c, cfg)
+            return {'package': pkg, 'limits': limits, 'usage': st.usage(c['id']),
+                    'over': st.over_limits(c, cfg)}
+        finally:
+            st.close()
 
     @endpoint
     def save_customer(self, args):
@@ -147,9 +159,13 @@ class customer_mgr_main:
         st = cm_store.Store()
         try:
             cid = st.save_customer(data, cfg.get('customer_prefix') or 'K-')
+            over = st.over_limits(st.get_customer(cid), cfg)
         finally:
             st.close()
-        return _ok({'id': cid}, 'Kunde gespeichert')
+        msg = 'Kunde gespeichert'
+        if over:
+            msg += ' – Achtung, Paket-Limits überschritten: ' + '; '.join(over)
+        return _ok({'id': cid, 'over': over}, msg)
 
     @endpoint
     def delete_customer(self, args):
@@ -187,6 +203,35 @@ class customer_mgr_main:
             st.close()
         return _ok(None, 'Portal-Passwort gesetzt')
 
+    # ================= Pakete =================
+    @endpoint
+    def get_packages(self, args):
+        st = cm_store.Store()
+        try:
+            return _ok(st.list_packages())
+        finally:
+            st.close()
+
+    @endpoint
+    def save_package(self, args):
+        data = _payload(args)
+        st = cm_store.Store()
+        try:
+            pid = st.save_package(data)
+        finally:
+            st.close()
+        return _ok({'id': pid}, 'Paket gespeichert')
+
+    @endpoint
+    def delete_package(self, args):
+        pid = int(getattr(args, 'id', 0) or 0)
+        st = cm_store.Store()
+        try:
+            st.delete_package(pid)
+        finally:
+            st.close()
+        return _ok(None, 'Paket gelöscht')
+
     # ================= Ressourcen & Zuordnung =================
     @endpoint
     def get_resources(self, args):
@@ -223,9 +268,10 @@ class customer_mgr_main:
                 valid.append({'type': key[0], 'ref_name': key[1], 'ref_id': ref_id})
             else:
                 unknown.append(key[1])
+        force = bool(data.get('force'))
         st = cm_store.Store()
         try:
-            added, skipped = st.assign(cid, valid)
+            added, skipped = st.assign(cid, valid, cm_store.load_cfg(), enforce_limits=not force)
         finally:
             st.close()
         msg = '{} zugeordnet'.format(len(added))
@@ -242,7 +288,7 @@ class customer_mgr_main:
         cid = int(data.get('customer_id') or 0)
         st = cm_store.Store()
         try:
-            d = st.assign_domain(cid, data.get('domain'))
+            d = st.assign_domain(cid, data.get('domain'), cm_store.load_cfg(), enforce_limits=not data.get('force'))
         finally:
             st.close()
         return _ok({'domain': d}, 'Domain-Bereich {} zugeordnet'.format(d))
@@ -313,6 +359,13 @@ class customer_mgr_main:
         cfg['mail_box_actions_configured'] = bool(
             cfg.get('mail_box_create_method') and cfg.get('mail_box_setpw_method') and cfg.get('mail_box_delete_method'))
         cfg['version'] = VERSION
+        lp = cm_store.logo_path()
+        cfg['logo_data_url'] = ''
+        if lp:
+            mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'gif': 'image/gif',
+                    'webp': 'image/webp', 'svg': 'image/svg+xml'}[lp.rsplit('.', 1)[1]]
+            with open(lp, 'rb') as f:
+                cfg['logo_data_url'] = 'data:{};base64,{}'.format(mime, base64.b64encode(f.read()).decode('ascii'))
         return _ok(cfg)
 
     @endpoint
@@ -326,6 +379,8 @@ class customer_mgr_main:
                   'cf_email', 'server_ipv4', 'server_ipv6'):
             if k in data:
                 cfg[k] = str(data[k] or '').strip()
+        if 'portal_name' in data:
+            cfg['portal_name'] = str(data['portal_name'] or '').strip()[:60] or 'KundenPortal'
         for k in ('site_default_max_sites', 'portal_max_upload_mb'):
             if k in data and str(data[k]).strip() != '':
                 try:
@@ -347,6 +402,25 @@ class customer_mgr_main:
         cm_store.save_cfg(cfg)
         _CACHE.invalidate()
         return _ok(None, 'Einstellungen gespeichert')
+
+    @endpoint
+    def save_logo(self, args):
+        """Logo fürs Kundenportal. Erwartet payload {"data": "data:image/...;base64,..."}."""
+        data = _payload(args)
+        raw = str(data.get('data') or '')
+        if raw.startswith('data:'):
+            raw = raw.split(',', 1)[-1]
+        try:
+            blob = base64.b64decode(raw, validate=True)
+        except Exception:
+            raise ValueError('Datei konnte nicht gelesen werden')
+        ext = cm_store.save_logo(blob)
+        return _ok({'type': ext}, 'Logo gespeichert – im Kundenportal nach dem Neuladen sichtbar')
+
+    @endpoint
+    def remove_logo(self, args):
+        cm_store.remove_logo()
+        return _ok(None, 'Logo entfernt')
 
     @endpoint
     def test_connection(self, args):

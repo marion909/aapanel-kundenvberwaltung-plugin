@@ -1,6 +1,6 @@
 <%- include('partials/header') %>
 <section class="panel">
-  <div class="panel-head">Übersicht</div>
+  <div class="panel-head">Übersicht<% if (pkg) { %><span class="muted"> · Paket <strong><%= pkg.name %></strong></span><% } %></div>
   <div class="cards">
     <div class="card">
       <span class="k">Heutige Anfragen</span>
@@ -12,13 +12,20 @@
     </a>
     <a class="card" href="/mail">
       <span class="k">Mail-Domains</span>
-      <strong><%= cards.mailDomains %></strong>
+      <strong><%= cards.mailDomains %><% if (limits.mail_domain) { %><small> /<%= limits.mail_domain %></small><% } %></strong>
     </a>
     <a class="card" href="/mail">
       <span class="k">Postfächer</span>
-      <strong><%= cards.mailboxes %></strong>
+      <strong><%= cards.mailboxes %><% if (limits.mailbox) { %><small> /<%= limits.mailbox %></small><% } %></strong>
     </a>
   </div>
+  <% if (pkg) { %>
+  <p class="panel-note">Ihr Paket <strong><%= pkg.name %></strong><% if (pkg.description) { %> – <%= pkg.description %><% } %>:
+    <%= limits.site ? limits.site : 'unbegrenzt viele' %> Website(s),
+    <%= limits.domain ? limits.domain : 'unbegrenzt viele' %> Domain-Bereich(e),
+    <%= limits.mailbox ? limits.mailbox : 'unbegrenzt viele' %> Postfach/Postfächer<% if (limits.mailbox_quota_mb) { %> à <%= limits.mailbox_quota_mb %> MB<% } %>,
+    Uploads bis <%= limits.upload_mb %> MB pro Datei.</p>
+  <% } %>
   <% if (cards.domains.length) { %>
   <p class="panel-note">Ihre Domain-Bereiche: <% cards.domains.forEach(function (d, i) { %><code><%= d %></code><%= i < cards.domains.length - 1 ? ' ' : '' %><% }) %> – darin können Sie unter <a href="/sites">Website</a> eigene Websites und Subdomains anlegen.</p>
   <% } %>
