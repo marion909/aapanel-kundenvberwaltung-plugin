@@ -147,6 +147,31 @@ class CmStoreTest(unittest.TestCase):
         cols = [r[1] for r in self.store.db.execute('PRAGMA table_info(customers)')]
         self.assertIn('max_sites', cols)
 
+    def test_logo_save_detect_and_replace(self):
+        png = b'\x89PNG\r\n\x1a\n' + b'0' * 50
+        self.assertEqual(self.cm_store.save_logo(png), 'png')
+        self.assertTrue(self.cm_store.logo_path().endswith('logo.png'))
+        svg = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        self.assertEqual(self.cm_store.save_logo(svg), 'svg')
+        # altes Logo wurde ersetzt, nicht zusätzlich behalten
+        self.assertTrue(self.cm_store.logo_path().endswith('logo.svg'))
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, 'logo.png')))
+        self.cm_store.remove_logo()
+        self.assertIsNone(self.cm_store.logo_path())
+
+    def test_logo_rejects_unsafe_or_invalid_files(self):
+        for bad in (b'<svg><script>alert(1)</script></svg>',
+                    b'<svg onload="alert(1)"></svg>',
+                    b'<svg><a href="javascript:alert(1)">x</a></svg>',
+                    b'<html><body>kein Bild</body></html>',
+                    b'MZ\x90\x00',
+                    b''):
+            with self.assertRaises(ValueError):
+                self.cm_store.save_logo(bad)
+        with self.assertRaises(ValueError):
+            self.cm_store.save_logo(b'\x89PNG\r\n\x1a\n' + b'0' * (1024 * 1024))
+        self.assertIsNone(self.cm_store.logo_path())
+
 
 if __name__ == '__main__':
     unittest.main()

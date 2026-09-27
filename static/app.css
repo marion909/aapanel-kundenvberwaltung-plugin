@@ -191,3 +191,12 @@ dialog h2{margin:0 0 14px;font-size:20px}
 .doc-dl dt{font-weight:600}
 .doc-dl dd{margin:0}
 @media (max-width:860px){.docs{grid-template-columns:1fr}.doc-toc{position:static}.doc{padding:6px 18px 22px}.doc-dl{grid-template-columns:1fr}.doc-dl dd{margin-bottom:6px}}
+
+/* ---------- Branding / Logo ---------- */
+.logo-box{display:flex;gap:18px;align-items:flex-start;margin-top:14px;flex-wrap:wrap}
+.logo-preview{width:220px;height:80px;display:flex;align-items:center;justify-content:center;background:#3c444d;border-radius:var(--r);padding:10px;flex:0 0 auto}
+.logo-preview img{max-width:100%;max-height:100%;object-fit:contain}
+.logo-preview .hint{color:#d5dae0}
+.logo-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-start;flex:1;min-width:220px}
+.btn-file{display:inline-block;margin:0!important;padding:7px 14px;border-radius:var(--r);background:var(--green);color:#fff;cursor:pointer;font-weight:600}
+.btn-file:hover{filter:brightness(.95)}

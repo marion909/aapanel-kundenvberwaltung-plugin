@@ -475,10 +475,11 @@
       const f = $('#settings-form');
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
        'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix',
-       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6']
+       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6', 'portal_name']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
       ['site_default_max_sites', 'portal_max_upload_mb'].forEach((k) => { f.elements[k].value = s[k] == null ? '' : s[k]; });
       f.elements.cf_proxied.checked = !!s.cf_proxied;
+      renderLogo(s.logo_data_url);
       f.elements.cf_api_key.value = '';
       $('#cf-key-hint').textContent = s.cf_api_key_set ? 'Hinterlegt. Nur ausfüllen, um ihn zu ändern.' : 'Kein Key hinterlegt – DNS-Einträge müssen dann manuell gesetzt werden.';
       $('#mailbox-methods-warn').innerHTML = s.mail_box_actions_configured ? '' :
@@ -503,6 +504,43 @@
     data.mail_db_fallback = f.elements.mail_db_fallback.checked;
     data.cf_proxied = f.elements.cf_proxied.checked;
     try { const r = await api('save_settings', { payload: data }); toast(r.msg); loadSettings(); }
+    catch (e) { toast(e.message, true); }
+  });
+
+  // ---------- Logo fürs Kundenportal ----------
+  function renderLogo(url) {
+    const box = $('#logo-preview');
+    box.innerHTML = '';
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Logo';
+      box.appendChild(img);
+    } else {
+      box.innerHTML = '<span class="hint">Kein Logo hinterlegt</span>';
+    }
+    $('#logo-remove').hidden = !url;
+  }
+
+  $('#logo-file').addEventListener('change', (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    if (file.size > 1024 * 1024) return toast('Logo ist zu groß (max. 1 MB)', true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const r = await api('save_logo', { payload: { data: reader.result } });
+        toast(r.msg);
+        renderLogo(reader.result);
+      } catch (e) { toast(e.message, true); }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $('#logo-remove').addEventListener('click', async () => {
+    if (!confirm('Logo wirklich entfernen? Im Kundenportal wird dann wieder der Portal-Name angezeigt.')) return;
+    try { const r = await api('remove_logo'); toast(r.msg); renderLogo(''); }
     catch (e) { toast(e.message, true); }
   });
 

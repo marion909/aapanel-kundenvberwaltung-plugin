@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><%= typeof title !== 'undefined' ? title + ' – Kundenportal' : 'Kundenportal' %></title>
+<title><%= typeof title !== 'undefined' ? title + ' – ' + branding.name : branding.name %></title>
 <link rel="stylesheet" href="/static/portal.css">
 </head>
 <% var loggedIn = typeof customer !== 'undefined' && customer; %>
@@ -16,7 +16,7 @@
 <div class="shell">
   <aside class="side">
     <div class="side-top">
-      <a class="brand" href="/">Kunden<span>Portal</span></a>
+      <a class="brand<%= branding.logoUrl ? ' has-logo' : '' %>" href="/"><% if (branding.logoUrl) { %><img src="<%= branding.logoUrl %>" alt="<%= branding.name %>"><% } else if (branding.name === 'KundenPortal') { %>Kunden<span>Portal</span><% } else { %><%= branding.name %><% } %></a>
       <button type="button" class="menu-toggle" aria-label="Menü" aria-expanded="false" aria-controls="side-nav"><%- icon('M4 7h16M4 12h16M4 17h16') %></button>
     </div>
     <nav id="side-nav">

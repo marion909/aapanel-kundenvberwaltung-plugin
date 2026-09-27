@@ -131,6 +131,30 @@ app.use((req, res, next) => {
   next();
 });
 
+// Branding (Portal-Name + Logo aus der Kundenverwaltung) für alle Seiten
+app.use((req, res, next) => {
+  const cfg = store.loadCfg();
+  const logo = store.logoFile();
+  res.locals.branding = {
+    name: String(cfg.portal_name || '').trim() || 'KundenPortal',
+    logoUrl: logo ? `/branding/logo?v=${logo.mtime}` : null,
+  };
+  next();
+});
+
+// Logo ist öffentlich (auch auf der Login-Seite sichtbar). Strikte CSP, damit
+// ein SVG beim direkten Aufruf keine Skripte ausführen kann.
+app.get('/branding/logo', (req, res) => {
+  const logo = store.logoFile();
+  if (!logo) return res.status(404).end();
+  res.set('Content-Type', logo.type);
+  res.set('Content-Length', String(logo.size));
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox");
+  res.set('X-Content-Type-Options', 'nosniff');
+  require('fs').createReadStream(logo.path).pipe(res);
+});
+
 app.use((req, res, next) => {
   res.locals.currentPath = req.path;
   res.set('X-Content-Type-Options', 'nosniff');

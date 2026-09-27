@@ -36,6 +36,7 @@ const DEFAULT_CFG = {
   cf_proxied: false,
   server_ipv4: '',
   server_ipv6: '',
+  portal_name: 'KundenPortal',
 };
 
 const PBKDF2_ITERATIONS = 600000; // muss mit cm_store.py übereinstimmen (Cross-Language-Hash-Kompatibilität)
@@ -289,4 +290,22 @@ class Store {
   }
 }
 
-module.exports = { Store, loadCfg, saveCfg, hashPassword, verifyPassword, DB_FILE, CFG_FILE, DATA_DIR };
+// Logo aus der Kundenverwaltung (vom Python-Admin-Plugin gespeichert, siehe cm_store.save_logo)
+const LOGO_TYPES = {
+  png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+};
+
+function logoFile() {
+  for (const ext of Object.keys(LOGO_TYPES)) {
+    const p = path.join(DATA_DIR, `logo.${ext}`);
+    try {
+      const st = fs.statSync(p);
+      if (st.isFile()) return { path: p, type: LOGO_TYPES[ext], mtime: Math.floor(st.mtimeMs), size: st.size };
+    } catch (e) {
+      // nächste Endung
+    }
+  }
+  return null;
+}
+
+module.exports = { logoFile, Store, loadCfg, saveCfg, hashPassword, verifyPassword, DB_FILE, CFG_FILE, DATA_DIR };

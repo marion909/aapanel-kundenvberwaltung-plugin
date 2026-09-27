@@ -2,7 +2,7 @@
 # coding: utf-8
 # aaPanel-Plugin: Kundenverwaltung
 # Klassenname muss dem Dateinamen entsprechen.
-import os, sys, json, time, traceback, functools
+import base64, os, sys, json, time, traceback, functools
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir('/www/server/panel')
@@ -313,6 +313,13 @@ class customer_mgr_main:
         cfg['mail_box_actions_configured'] = bool(
             cfg.get('mail_box_create_method') and cfg.get('mail_box_setpw_method') and cfg.get('mail_box_delete_method'))
         cfg['version'] = VERSION
+        lp = cm_store.logo_path()
+        cfg['logo_data_url'] = ''
+        if lp:
+            mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'gif': 'image/gif',
+                    'webp': 'image/webp', 'svg': 'image/svg+xml'}[lp.rsplit('.', 1)[1]]
+            with open(lp, 'rb') as f:
+                cfg['logo_data_url'] = 'data:{};base64,{}'.format(mime, base64.b64encode(f.read()).decode('ascii'))
         return _ok(cfg)
 
     @endpoint
@@ -326,6 +333,8 @@ class customer_mgr_main:
                   'cf_email', 'server_ipv4', 'server_ipv6'):
             if k in data:
                 cfg[k] = str(data[k] or '').strip()
+        if 'portal_name' in data:
+            cfg['portal_name'] = str(data['portal_name'] or '').strip()[:60] or 'KundenPortal'
         for k in ('site_default_max_sites', 'portal_max_upload_mb'):
             if k in data and str(data[k]).strip() != '':
                 try:
@@ -347,6 +356,25 @@ class customer_mgr_main:
         cm_store.save_cfg(cfg)
         _CACHE.invalidate()
         return _ok(None, 'Einstellungen gespeichert')
+
+    @endpoint
+    def save_logo(self, args):
+        """Logo fürs Kundenportal. Erwartet payload {"data": "data:image/...;base64,..."}."""
+        data = _payload(args)
+        raw = str(data.get('data') or '')
+        if raw.startswith('data:'):
+            raw = raw.split(',', 1)[-1]
+        try:
+            blob = base64.b64decode(raw, validate=True)
+        except Exception:
+            raise ValueError('Datei konnte nicht gelesen werden')
+        ext = cm_store.save_logo(blob)
+        return _ok({'type': ext}, 'Logo gespeichert – im Kundenportal nach dem Neuladen sichtbar')
+
+    @endpoint
+    def remove_logo(self, args):
+        cm_store.remove_logo()
+        return _ok(None, 'Logo entfernt')
 
     @endpoint
     def test_connection(self, args):

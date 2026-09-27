@@ -1,6 +1,6 @@
 <% if (typeof customer !== 'undefined' && customer) { %>
     </main>
-    <footer class="foot">Kundenportal<% if (typeof appVersion !== 'undefined') { %> v<%= appVersion %><% } %> · betrieben mit aaPanel</footer>
+    <footer class="foot"><%= branding.name %><% if (typeof appVersion !== 'undefined') { %> v<%= appVersion %><% } %> · betrieben mit aaPanel</footer>
   </div>
 </div>
 <% } else { %>

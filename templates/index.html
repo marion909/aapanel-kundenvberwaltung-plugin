@@ -94,6 +94,17 @@
       <label>Server-IPv6 <input name="server_ipv6" placeholder="optional"></label>
       <label class="check"><input type="checkbox" name="cf_proxied"> Neue Einträge über Cloudflare proxien (orange Wolke)</label>
 
+      <h2>Branding im Kundenportal</h2>
+      <label>Portal-Name <input name="portal_name" maxlength="60" placeholder="KundenPortal"><small>Erscheint in der Seitenleiste (wenn kein Logo), auf der Login-Seite und im Browser-Tab.</small></label>
+      <div class="logo-box">
+        <div class="logo-preview" id="logo-preview"><span class="hint">Kein Logo hinterlegt</span></div>
+        <div class="logo-actions">
+          <label class="btn-file">Logo hochladen<input type="file" id="logo-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden></label>
+          <button type="button" id="logo-remove" hidden>Logo entfernen</button>
+          <small class="hint">PNG, JPG, SVG, WebP oder GIF, max. 1 MB. Am besten ein querformatiges Logo mit transparentem Hintergrund und heller Schrift – es wird im Portal immer auf dunklem Grund angezeigt (Seitenleiste und Kopf der Login-Seite), wie in dieser Vorschau.</small>
+        </div>
+      </div>
+
       <h2>Kunden</h2>
       <label>Präfix Kundennummer <input name="customer_prefix"></label>
 
@@ -254,6 +265,7 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
         <dt>Pfad-Vorlage für neue Websites</dt><dd>Wo das Portal neue Websites anlegt. Platzhalter: <code>{host}</code> (Pflicht), <code>{domain}</code>, <code>{customer_no}</code>. Beispiel: <code>/mnt/HC_Volume_101973258/wwwroot/{customer_no}/{host}</code>.</dd>
         <dt>Max. Websites / Upload-Größe</dt><dd>Standard-Limit pro Kunde (0 = unbegrenzt) und maximale Dateigröße pro Upload im Dateimanager.</dd>
         <dt>API-Präfixe</dt><dd><code>/v2,</code> = erst neue (<code>/v2/site</code>), dann klassische API (<code>/site</code>). Standard lassen.</dd>
+        <dt>Branding</dt><dd>Portal-Name (Login-Seite, Browser-Tab, Seitenleiste ohne Logo) und Logo (PNG, JPG, SVG, WebP, GIF, max. 1 MB). Das Logo erscheint sofort nach dem Hochladen im Portal (Seite neu laden), ein Neustart ist nicht nötig. SVGs mit Skripten werden abgelehnt.</dd>
         <dt>Cloudflare</dt><dd>E-Mail + Global API Key + Server-IP: neue Websites/Subdomains bekommen automatisch A-/AAAA-Einträge; beim Löschen werden nur Einträge entfernt, die auf die eigene Server-IP zeigen. Leer lassen = DNS manuell.</dd>
       </dl>
 
@@ -269,6 +281,7 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
       <ul>
         <li>Datenbank: <code>/www/server/panel/data/customer_mgr/customer_mgr.db</code></li>
         <li>Einstellungen inkl. API-Schlüssel: <code>/www/server/panel/data/customer_mgr/config.json</code></li>
+        <li>Logo fürs Kundenportal: <code>/www/server/panel/data/customer_mgr/logo.*</code></li>
         <li>Diesen Ordner in die Server-Sicherung aufnehmen. Beim Deinstallieren des Plugins bleibt er erhalten (erst <code>bash install.sh purge</code> löscht ihn).</li>
       </ul>
 

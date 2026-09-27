@@ -35,6 +35,7 @@ DEFAULT_CFG = {
     'cf_proxied': False,
     'server_ipv4': '',
     'server_ipv6': '',
+    'portal_name': 'KundenPortal',        # Name im Kundenportal (Seitenleiste, Login, Titel)
 }
 
 PBKDF2_ITERATIONS = 600000  # aktuelle OWASP-Empfehlung für PBKDF2-SHA256
@@ -175,6 +176,68 @@ def save_cfg(cfg):
         json.dump(cfg, f, indent=2)
     os.chmod(tmp, 0o600)
     os.replace(tmp, CFG_FILE)
+
+
+# ---------- Branding (Logo für das Kundenportal) ----------
+LOGO_MAX_BYTES = 1024 * 1024
+LOGO_EXTS = ('png', 'jpg', 'gif', 'webp', 'svg')
+
+
+def _logo_type(data):
+    if data.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'png'
+    if data.startswith(b'\xff\xd8\xff'):
+        return 'jpg'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'gif'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'webp'
+    head = data[:4096].lstrip(b'\xef\xbb\xbf \t\r\n').lower()
+    if (head.startswith(b'<?xml') or head.startswith(b'<svg') or head.startswith(b'<!--')) and b'<svg' in head:
+        low = data.lower()
+        # Das Logo wird nur als <img> eingebunden (dort laufen keine Skripte) und
+        # mit strikter CSP ausgeliefert - aktive Inhalte trotzdem gar nicht erst annehmen.
+        for bad in (b'<script', b'javascript:', b'<foreignobject', b'<iframe', b'<embed', b'<object'):
+            if bad in low:
+                raise ValueError('SVG-Logo enthält aktive Inhalte (Skripte o. Ä.) und wurde abgelehnt')
+        if re.search(rb'\son[a-z]+\s*=', low):
+            raise ValueError('SVG-Logo enthält Event-Handler (onload o. Ä.) und wurde abgelehnt')
+        return 'svg'
+    return None
+
+
+def logo_path():
+    for ext in LOGO_EXTS:
+        p = os.path.join(DATA_DIR, 'logo.' + ext)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def save_logo(data):
+    if not data:
+        raise ValueError('Keine Datei übermittelt')
+    if len(data) > LOGO_MAX_BYTES:
+        raise ValueError('Logo ist zu groß (max. 1 MB)')
+    ext = _logo_type(data)
+    if not ext:
+        raise ValueError('Nur PNG, JPG, GIF, WebP oder SVG sind als Logo erlaubt')
+    _ensure_dir()
+    remove_logo()
+    target = os.path.join(DATA_DIR, 'logo.' + ext)
+    tmp = target + '.tmp'
+    with open(tmp, 'wb') as f:
+        f.write(data)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, target)
+    return ext
+
+
+def remove_logo():
+    for ext in LOGO_EXTS:
+        p = os.path.join(DATA_DIR, 'logo.' + ext)
+        if os.path.isfile(p):
+            os.remove(p)
 
 
 class Store(object):
