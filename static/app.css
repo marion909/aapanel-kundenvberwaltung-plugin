@@ -101,7 +101,7 @@ label.check input{width:auto;margin:0}
 .lane .k{flex:0 0 72px;font-size:12px;color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-left:3px solid var(--c,var(--muted));border-radius:4px;padding:2px 8px;font-size:13px;background:var(--paper);max-width:100%}
-.chip.site{--c:var(--web)} .chip.mail_domain{--c:var(--mail)} .chip.mailbox{--c:var(--box)}
+.chip.site{--c:var(--web)} .chip.mail_domain{--c:var(--mail)} .chip.mailbox{--c:var(--box)} .chip.ftp{--c:#8a6d3b}
 .chip.domain{--c:var(--ink);font-weight:600}
 .chip.missing{--c:var(--red);background:var(--red-bg);text-decoration:line-through}
 .chip.stopped{opacity:.65}

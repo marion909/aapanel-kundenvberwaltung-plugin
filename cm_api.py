@@ -155,6 +155,14 @@ class PanelApi(object):
                 })
         return out, errors
 
+    # ---------- FTP ----------
+    def list_ftps(self, data_path='/v2/data'):
+        rows = self.find_rows(self.raw(data_path + '?action=getData',
+                                       {'table': 'ftps', 'p': 1, 'limit': 1000, 'search': ''}))
+        # Passwörter (stehen in der aaPanel-Antwort) bewusst nicht übernehmen
+        return [{'id': r.get('id'), 'name': r.get('name', ''), 'path': r.get('path', ''),
+                 'status': str(r.get('status', '')), 'ps': r.get('ps', '')} for r in rows if r.get('name')]
+
     # ---------- Mailserver (mail_sys) ----------
     # Nur Lese-Zugriffe: Schreibaktionen (Postfach anlegen/ändern/löschen,
     # Website Start/Stopp) werden ausschließlich vom Node-Portal ausgeführt

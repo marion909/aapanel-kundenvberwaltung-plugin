@@ -1,0 +1,46 @@
+<%- include('partials/header') %>
+<section class="panel">
+  <div class="panel-head">FTP-Zugänge</div>
+  <div class="panel-body">
+  <p class="hint">Server: <strong class="mono"><%= host || '–' %></strong> · Port 21 · FTP mit TLS (explizit) empfohlen.
+    Jeder Zugang sieht nur sein Verzeichnis innerhalb der jeweiligen Website.<% if (quota.max) { %> Genutzt: <%= quota.used %> von <%= quota.max %>.<% } %></p>
+  <% if (error) { %><ul class="flash"><li class="error"><%= error %></li></ul><% } %>
+  <% if (!accounts.length) { %>
+    <p class="empty">Noch keine FTP-Zugänge.</p>
+  <% } else { %>
+  <table class="res">
+    <thead><tr><th>Benutzer</th><th>Website</th><th>Verzeichnis</th><th>Status</th></tr></thead>
+    <tbody>
+    <% accounts.forEach(function (a) { %>
+      <tr><td class="mono"><%= a.name %></td>
+      <% if (a.state !== 'ok') { %>
+        <td colspan="3"><span class="badge off">in aaPanel nicht mehr vorhanden</span></td>
+      <% } else { %>
+        <td><% if (a.site) { %><a href="/sites/<%= a.site.id %>/ftp"><%= a.site.ref_name %></a><% } else { %>–<% } %></td>
+        <td class="mono"><%= a.site ? a.rel : '–' %></td>
+        <td><% if (a.active) { %><span class="badge on">aktiv</span><% } else { %><span class="badge off">gesperrt</span><% } %></td>
+      <% } %></tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+  </div>
+</section>
+<section class="panel">
+  <div class="panel-head">Neuer FTP-Zugang</div>
+  <div class="panel-body">
+  <% if (!allowed) { %>
+    <p class="empty">FTP-Zugänge sind in Ihrem Paket nicht enthalten.</p>
+  <% } else if (!sites.length) { %>
+    <p class="empty">Noch keine Website vorhanden. <a href="/sites">Jetzt anlegen</a></p>
+  <% } else { %>
+    <p class="hint">Website wählen, für die der Zugang gelten soll:</p>
+    <div class="cards">
+      <% sites.forEach(function (s) { %>
+      <a class="card" href="/sites/<%= s.id %>/ftp"><span class="k">Website</span><strong class="name"><%= s.ref_name %></strong></a>
+      <% }) %>
+    </div>
+  <% } %>
+  </div>
+</section>
+<%- include('partials/footer') %>

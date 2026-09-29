@@ -8,9 +8,10 @@ const { ApiError } = require('../lib/api');
 const { CloudflareError } = require('../lib/cloudflare');
 const { SiteService } = require('../lib/sites');
 const { FileManager } = require('../lib/files');
+const { FtpService } = require('../lib/ftp');
 const { ValidationError } = require('../lib/validate');
 
-const TABS = ['overview', 'domains', 'ssl', 'redirects', 'rewrite', 'files', 'logs', 'delete'];
+const TABS = ['overview', 'domains', 'ssl', 'redirects', 'rewrite', 'files', 'ftp', 'logs', 'delete'];
 const MAX_CHUNK = 8 * 1024 * 1024;
 
 function isUserError(e) {
@@ -157,6 +158,11 @@ module.exports = function registerSiteRoutes(app, { loginRequired, ownedAssignme
         if (tab === 'redirects') data.redirects = await svc.redirects(site);
         if (tab === 'rewrite') data.rewrite = svc.rewriteGet(site);
         if (tab === 'logs') data.log = await svc.logs(site);
+        if (tab === 'ftp') {
+          const ftp = new FtpService(svc);
+          data.ftp = { allowed: ftp.allowed(), quota: ftp.quota(), host: ftp.host(req.hostname), accounts: [] };
+          data.ftp.accounts = await ftp.forSite(site);
+        }
         if (tab === 'files') {
           const fm = fileManager(svc, site);
           data.listing = fm.list(req.query.path || '/');
@@ -251,9 +257,71 @@ module.exports = function registerSiteRoutes(app, { loginRequired, ownedAssignme
         redirect: `/sites/${req.params.id}/delete`,
       });
     }
+    // FTP-Zugänge in dieser Website vorher einsammeln, danach mitlöschen
+    const ftp = new FtpService(svc);
+    const ftpAccounts = await ftp.forSite(site).catch(() => []);
     await svc.remove(row, site, req.body.delete_files === '1');
+    const notes = [];
+    for (const acc of ftpAccounts) {
+      try {
+        await ftp.remove(acc);
+      } catch (e) {
+        notes.push(`FTP-Zugang „${acc.name}“ konnte nicht gelöscht werden: ${e.message}`);
+      }
+    }
     cache.invalidate();
-    return { message: `Website „${site.name}“ wurde gelöscht.`, redirect: '/sites' };
+    return { message: `Website „${site.name}“ wurde gelöscht.`, notes, redirect: '/sites' };
+  }));
+
+  // ------------------------------------------------------------------ FTP
+  async function loadFtp(req) {
+    const ctx = await loadSite(req);
+    const asg = ownedAssignment(req, Number(req.params.fid), 'ftp');
+    ctx.ftp = new FtpService(ctx.svc);
+    ctx.acc = await ctx.ftp.resolve(asg, ctx.site);
+    return ctx;
+  }
+
+  // Fehler führen zurück auf den FTP-Tab
+  function ftpAction(fn) {
+    return action(async (req, res) => {
+      try {
+        return await fn(req, res);
+      } catch (e) {
+        if (isUserError(e)) e.redirect = `/sites/${req.params.id}/ftp`;
+        throw e;
+      }
+    });
+  }
+
+  app.post('/sites/:id/ftp/add', ...ftpAction(async (req) => {
+    const { svc, site } = await loadSite(req);
+    const r = await new FtpService(svc).create(site, {
+      username: req.body.username, password: req.body.password, dir: req.body.dir,
+    });
+    const notes = r.password ? [`Passwort für „${r.user}“: ${r.password} – bitte jetzt notieren, es wird nicht noch einmal angezeigt.`] : [];
+    return { message: `FTP-Zugang „${r.user}“ wurde angelegt.`, notes, redirect: `/sites/${req.params.id}/ftp` };
+  }));
+
+  app.post('/sites/:id/ftp/:fid/password', ...ftpAction(async (req) => {
+    const { ftp, acc } = await loadFtp(req);
+    const pw = await ftp.setPassword(acc, req.body.password);
+    const notes = pw ? [`Neues Passwort für „${acc.name}“: ${pw} – bitte jetzt notieren.`] : [];
+    return { message: `Passwort für „${acc.name}“ wurde geändert.`, notes, redirect: `/sites/${req.params.id}/ftp` };
+  }));
+
+  app.post('/sites/:id/ftp/:fid/status', ...ftpAction(async (req) => {
+    const { ftp, acc } = await loadFtp(req);
+    const on = req.body.enabled === '1';
+    await ftp.setActive(acc, on);
+    return { message: `FTP-Zugang „${acc.name}“ wurde ${on ? 'aktiviert' : 'gesperrt'}.`, redirect: `/sites/${req.params.id}/ftp` };
+  }));
+
+  app.post('/sites/:id/ftp/:fid/delete', ...ftpAction(async (req) => {
+    const { ftp, acc } = await loadFtp(req);
+    await ftp.remove(acc);
+    cache.invalidate();
+    return { message: `FTP-Zugang „${acc.name}“ wurde gelöscht.`, redirect: `/sites/${req.params.id}/ftp` };
   }));
 
   // -------------------------------------------------------- Dateimanager

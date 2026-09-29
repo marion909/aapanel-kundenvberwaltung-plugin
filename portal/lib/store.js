@@ -37,6 +37,7 @@ const DEFAULT_CFG = {
   server_ipv4: '',
   server_ipv6: '',
   portal_name: 'KundenPortal',
+  ftp_host: '', // FTP-Server-Adresse für Kunden (leer = Server-IPv4)
 };
 
 const PBKDF2_ITERATIONS = 600000; // muss mit cm_store.py übereinstimmen (Cross-Language-Hash-Kompatibilität)
@@ -91,6 +92,8 @@ CREATE TABLE IF NOT EXISTS packages (
   mailbox_quota_mb INTEGER NOT NULL DEFAULT 0,
   max_upload_mb INTEGER NOT NULL DEFAULT 0,
   ssl_allowed INTEGER NOT NULL DEFAULT 1,
+  ftp_allowed INTEGER NOT NULL DEFAULT 1,
+  max_ftp INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -124,6 +127,8 @@ const MIGRATIONS = [
   ['customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"],
   ['customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"],
   ['customers', 'package_id', 'INTEGER'],
+  ['packages', 'ftp_allowed', 'INTEGER NOT NULL DEFAULT 1'],
+  ['packages', 'max_ftp', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 function columnExists(db, table, col) {
@@ -132,6 +137,8 @@ function columnExists(db, table, col) {
 
 function migrate(db) {
   for (const [table, col, decl] of MIGRATIONS) {
+    // Tabellen, die es (noch) nicht gibt, legt SCHEMA vollständig an
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (!columnExists(db, table, col)) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl}`);
     }
@@ -249,7 +256,7 @@ class Store {
   }
 
   usage(cid) {
-    const counts = { site: 0, domain: 0, mail_domain: 0, mailbox: 0 };
+    const counts = { site: 0, domain: 0, mail_domain: 0, mailbox: 0, ftp: 0 };
     for (const r of this.db.prepare('SELECT type, COUNT(*) AS n FROM assignments WHERE customer_id=? GROUP BY type').all(cid)) {
       if (r.type in counts) counts[r.type] = r.n;
     }
@@ -274,7 +281,7 @@ class Store {
   }
 
   assign(cid, items) {
-    const TYPES = ['site', 'mail_domain', 'mailbox', 'domain'];
+    const TYPES = ['site', 'mail_domain', 'mailbox', 'domain', 'ftp'];
     if (!this.getCustomer(cid)) throw new Error('Kunde nicht gefunden');
     const now = Math.floor(Date.now() / 1000);
     const added = [];

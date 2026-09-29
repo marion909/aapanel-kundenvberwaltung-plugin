@@ -6,7 +6,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TYPE_LABEL = { site: 'Website', mail_domain: 'Mail-Domain', mailbox: 'Postfach', domain: 'Domain-Bereich' };
+  const TYPE_LABEL = { site: 'Website', mail_domain: 'Mail-Domain', mailbox: 'Postfach', domain: 'Domain-Bereich', ftp: 'FTP-Zugang' };
 
   async function api(fun, params = {}) {
     const body = new URLSearchParams();
@@ -45,8 +45,10 @@
     return d.toLocaleDateString('de-AT') + ' ' + d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
   };
   const custName = (c) => c.company || [c.first_name, c.last_name].filter(Boolean).join(' ') || '(ohne Namen)';
-  const domainOf = (type, name) => {
+  const domainOf = (type, name, info) => {
     if (type === 'mailbox') return name.split('@').pop();
+    // FTP-Konten gehören zur Website, in deren Verzeichnis sie liegen
+    if (type === 'ftp') return info && info.site ? info.site.replace(/^www\./, '') : 'FTP (ohne Website)';
     if (type === 'site') return name.replace(/^www\./, '');
     return name;
   };
@@ -147,7 +149,7 @@
       } else {
         const groups = {};
         assignments.forEach((a) => {
-          const d = domainOf(a.type, a.ref_name);
+          const d = domainOf(a.type, a.ref_name, a.info);
           (groups[d] = groups[d] || []).push(a);
         });
         html += '<div class="domains">' + Object.keys(groups).sort().map((d) => domainCard(d, groups[d], 'customer')).join('') + '</div>';
@@ -189,7 +191,7 @@
 
   // Eine Domain mit ihren Ressourcen, nach Art getrennt
   function domainCard(domain, items, mode, owners) {
-    const lanes = [['domain', 'Bereich'], ['site', 'Web'], ['mail_domain', 'Mail'], ['mailbox', 'Postfächer']];
+    const lanes = [['domain', 'Bereich'], ['site', 'Web'], ['mail_domain', 'Mail'], ['mailbox', 'Postfächer'], ['ftp', 'FTP']];
     const lanesHtml = lanes.map(([t, label]) => {
       const list = items.filter((i) => i.type === t);
       if (!list.length) return '';
@@ -214,6 +216,7 @@
     let extra = '';
     if (i.type === 'site' && info.project_type && info.project_type !== 'PHP') extra = `<span class="t">${esc(info.project_type)}</span>`;
     if (i.type === 'site' && info.status === '0') cls += ' stopped';
+    if (i.type === 'ftp' && info.status === '0') cls += ' stopped';
     if (mode === 'customer') {
       let title = TYPE_LABEL[i.type];
       if (i.state === 'missing') { cls += ' missing'; title += ' – im Panel nicht mehr vorhanden'; }
@@ -351,12 +354,13 @@
     res.sites.forEach((s) => out.push({ type: 'site', ref_name: s.name, owner: s.owner, info: s }));
     res.mail_domains.forEach((d) => out.push({ type: 'mail_domain', ref_name: d.domain, owner: d.owner, info: d }));
     res.mailboxes.forEach((b) => out.push({ type: 'mailbox', ref_name: b.username, owner: b.owner, info: b }));
+    (res.ftps || []).forEach((f) => out.push({ type: 'ftp', ref_name: f.name, owner: f.owner, info: f }));
     return out;
   }
 
   function groupByDomain(items) {
     const g = {};
-    items.forEach((i) => { const d = domainOf(i.type, i.ref_name); (g[d] = g[d] || []).push(i); });
+    items.forEach((i) => { const d = domainOf(i.type, i.ref_name, i.info); (g[d] = g[d] || []).push(i); });
     return g;
   }
 
@@ -472,6 +476,7 @@
             <dt>Postfach-Größe</dt><dd>${p.mailbox_quota_mb ? p.mailbox_quota_mb + ' MB' : 'Standard'}</dd>
             <dt>Upload pro Datei</dt><dd>${p.max_upload_mb ? p.max_upload_mb + ' MB' : 'Standard'}</dd>
             <dt>SSL durch Kunden</dt><dd>${p.ssl_allowed ? 'ja' : 'nein'}</dd>
+            <dt>FTP-Zugänge</dt><dd>${p.ftp_allowed ? lim(p.max_ftp) : 'nein'}</dd>
           </dl>
           <div class="actions"><button type="button" data-edit="${p.id}">Bearbeiten</button>
             <button type="button" class="danger" data-del="${p.id}">Löschen</button></div>
@@ -494,9 +499,10 @@
     $('#pk-title').textContent = p ? 'Paket bearbeiten' : 'Neues Paket';
     f.elements.id.value = p ? p.id : '';
     if (p) {
-      ['name', 'description', 'max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes', 'mailbox_quota_mb', 'max_upload_mb']
+      ['name', 'description', 'max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes', 'mailbox_quota_mb', 'max_upload_mb', 'max_ftp']
         .forEach((k) => { f.elements[k].value = p[k] == null ? '' : p[k]; });
       f.elements.ssl_allowed.checked = !!p.ssl_allowed;
+      f.elements.ftp_allowed.checked = p.ftp_allowed === undefined ? true : !!p.ftp_allowed;
     }
     $('#dlg-package').showModal();
     f.elements.name.focus();
@@ -507,6 +513,7 @@
     const f = $('#package-form');
     const data = Object.fromEntries(new FormData(f).entries());
     data.ssl_allowed = f.elements.ssl_allowed.checked;
+    data.ftp_allowed = f.elements.ftp_allowed.checked;
     if (!data.id) delete data.id;
     try {
       const r = await api('save_package', { payload: data });
@@ -590,7 +597,7 @@
       const f = $('#settings-form');
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
        'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix',
-       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6', 'portal_name']
+       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6', 'portal_name', 'ftp_host']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
       ['site_default_max_sites', 'portal_max_upload_mb'].forEach((k) => { f.elements[k].value = s[k] == null ? '' : s[k]; });
       f.elements.cf_proxied.checked = !!s.cf_proxied;

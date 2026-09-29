@@ -106,6 +106,7 @@
 
       <h2>Branding im Kundenportal</h2>
       <label>Portal-Name <input name="portal_name" maxlength="60" placeholder="KundenPortal"><small>Erscheint in der Seitenleiste (wenn kein Logo), auf der Login-Seite und im Browser-Tab.</small></label>
+      <label>FTP-Server für Kunden <input name="ftp_host" placeholder="z. B. ftp.neuhauser.cloud"><small>Wird Kunden im Portal als FTP-Adresse angezeigt (leer = Server-IPv4).</small></label>
       <div class="logo-box">
         <div class="logo-preview" id="logo-preview"><span class="hint">Kein Logo hinterlegt</span></div>
         <div class="logo-actions">
@@ -243,6 +244,7 @@
         <dt>Postfach-Größe</dt><dd>Kontingent neuer Postfächer in MB (0 = Standard aus den Einstellungen).</dd>
         <dt>Upload pro Datei</dt><dd>Maximale Dateigröße im Dateimanager (0 = Standard aus den Einstellungen).</dd>
         <dt>SSL durch Kunden</dt><dd>Aus = der Kunde sieht seine Zertifikate, kann aber keine ausstellen, erzwingen oder deaktivieren.</dd>
+        <dt>FTP-Zugänge</dt><dd>Anzahl FTP-Zugänge, die der Kunde im Portal selbst anlegen darf. Der Haken „FTP erlauben“ schaltet die Funktion ganz ab.</dd>
       </dl>
       <ul>
         <li>Bei allen Anzahlen gilt <strong>0 = unbegrenzt</strong>. Ohne Paket sind Mail-Domains, Postfächer und Domain-Bereiche unbegrenzt, für Websites gilt der Standard aus den Einstellungen.</li>
@@ -268,6 +270,7 @@
         <li><strong>Website:</strong> neue Website/Subdomain anlegen (PHP-Version, www-Alias, automatisches Let's-Encrypt-SSL), starten/stoppen, löschen (optional mit Dateien).</li>
         <li><strong>Pro Website:</strong> PHP-Version, Standard-Dokumente, Ausführungsverzeichnis (z. B. <code>/public</code>), weitere Domains/Subdomains, SSL (ausstellen/erneuern, HTTPS erzwingen, deaktivieren), Weiterleitungen, Rewrite-Vorlagen (nur geprüfte aaPanel-Vorlagen wie <code>wordpress</code>), Zugriffslog.</li>
         <li><strong>Dateimanager:</strong> Dateien und Ordner hochladen (auch Drag &amp; Drop, große Dateien in 4-MB-Stücken), herunterladen, im Editor bearbeiten, umbenennen, verschieben/kopieren, Rechte setzen, löschen, ZIP packen/entpacken. Der Kunde kommt dabei nie aus dem Verzeichnis seiner Website heraus.</li>
+        <li><strong>FTP:</strong> FTP-Zugänge pro Website anlegen (optional auf einen Unterordner beschränkt), Passwort ändern, sperren/entsperren, löschen. Das FTP-Konto ist in aaPanel (Pure-FTPd) auf sein Verzeichnis eingesperrt und kommt nicht aus der Website heraus.</li>
         <li><strong>SSL:</strong> Übersicht aller Zertifikate mit Restlaufzeit.</li>
         <li><strong>Mailserver:</strong> Postfächer anlegen, Passwort ändern, löschen (in zugeordneten Mail-Domains).</li>
         <li><strong>Journal:</strong> Protokoll aller Aktionen des Kunden und der Admin-Zuordnungen.</li>
@@ -412,7 +415,7 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
       <label>Kundennummer <input name="customer_no" placeholder="automatisch"></label>
       <label class="wide">Hosting-Paket
         <select name="package_id"><option value="">– kein Paket –</option></select>
-        <small>Legt die Limits fest (Websites, Domain-Bereiche, Mail-Domains, Postfächer, Postfach-Größe, Upload, SSL).</small>
+        <small>Legt die Limits fest (Websites, Domain-Bereiche, Mail-Domains, Postfächer, Postfach-Größe, Upload, SSL, FTP).</small>
       </label>
       <label>Max. Websites (Abweichung) <input name="max_sites" type="number" min="-1" placeholder="-1"><small>-1 = laut Paket, 0 = unbegrenzt</small></label>
       <label>Status
@@ -468,7 +471,9 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
       <label>Postfächer <input name="max_mailboxes" type="number" min="0" value="0"></label>
       <label>Postfach-Größe (MB) <input name="mailbox_quota_mb" type="number" min="0" value="0"><small>0 = Standard aus Einstellungen</small></label>
       <label>Max. Upload pro Datei (MB) <input name="max_upload_mb" type="number" min="0" value="0"><small>0 = Standard aus Einstellungen</small></label>
+      <label>FTP-Zugänge <input name="max_ftp" type="number" min="0" value="0"></label>
       <label class="wide check"><input type="checkbox" name="ssl_allowed" checked> Kunde darf SSL-Zertifikate selbst ausstellen und verwalten</label>
+      <label class="wide check"><input type="checkbox" name="ftp_allowed" checked> Kunde darf FTP-Zugänge für seine Websites anlegen</label>
     </div>
     <p class="hint">Bei allen Anzahlen gilt: 0 = unbegrenzt.</p>
     <p class="form-err" id="pk-err"></p>

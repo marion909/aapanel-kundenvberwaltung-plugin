@@ -195,3 +195,49 @@ test('Alle Tabs der Website-Seite rendern', async () => {
     for (const k of Object.keys(saved)) P[k] = saved[k];
   }
 });
+
+test('FTP: Zugang anlegen, anzeigen und fremde Zugänge abweisen', async () => {
+  const P = SiteService.prototype;
+  const origCall = P.call;
+  const ftps = [];
+  P.call = async function (module, action, params) {
+    if (module === 'data' && params.table === 'ftps') return { data: ftps.filter((f) => !params.search || f.name.includes(params.search)) };
+    if (module === 'ftp' && action === 'AddUser') {
+      ftps.push({ id: 50 + ftps.length, name: params.ftp_username, password: params.ftp_password, path: params.path, status: '1' });
+      return { result: 'Setup successfully!' };
+    }
+    throw new Error(`unerwarteter Aufruf ${module}/${action}`);
+  };
+  try {
+    const s = await new Session().login();
+    let html = await (await s.req(`/sites/${ownSiteId}/ftp`)).text();
+    assert.match(html, /Neuer FTP-Zugang/);
+
+    // Ausbruch aus dem Website-Verzeichnis wird abgewiesen, ohne aaPanel aufzurufen
+    let res = await s.post(`/sites/${ownSiteId}/ftp/add`, { csrf_token: s.csrf, username: 'kunde_ftp', password: 'Geheim123', dir: '../..' });
+    assert.match(res.headers.get('location'), /\/ftp$/);
+    assert.equal(ftps.length, 0);
+
+    res = await s.post(`/sites/${ownSiteId}/ftp/add`, { csrf_token: s.csrf, username: 'kunde_ftp', password: '', dir: '/upload' });
+    assert.equal(res.status, 302);
+    html = await (await s.req(res.headers.get('location'))).text();
+    assert.match(html, /FTP-Zugang „kunde_ftp“ wurde angelegt/);
+    assert.ok(html.includes(`Passwort für „kunde_ftp“: ${ftps[0].password}`), 'erzeugtes Passwort wird einmalig angezeigt');
+    assert.match(html, /<td class="mono">\/upload<\/td>/);
+    assert.equal(ftps[0].path, path.join(fs.realpathSync(siteRoot), 'upload'));
+
+    html = await (await s.req('/ftp')).text();
+    assert.match(html, /kunde_ftp/);
+
+    // Zuordnung eines anderen Kunden: 404
+    const store = new Store();
+    const other = store.db.prepare("SELECT id FROM customers WHERE customer_no='K-20002'").get().id;
+    store.assign(other, [{ type: 'ftp', ref_name: 'fremd_ftp', ref_id: '99' }]);
+    const foreign = store.db.prepare("SELECT id FROM assignments WHERE ref_name='fremd_ftp'").get().id;
+    store.close();
+    res = await s.post(`/sites/${ownSiteId}/ftp/${foreign}/delete`, { csrf_token: s.csrf });
+    assert.equal(res.status, 404);
+  } finally {
+    P.call = origCall;
+  }
+});
