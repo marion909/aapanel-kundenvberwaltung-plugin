@@ -125,6 +125,58 @@
       <div id="test-out"></div>
     </form>
 
+    <form id="monitor-form" autocomplete="off">
+      <h2>Mail-Monitoring</h2>
+      <p class="hint">Prüft regelmäßig mit echten Testmails, ob der Mailserver senden <em>und</em> empfangen kann, und meldet Störungen per Discord. Ausgang: eigenes Postfach → externes Postfach. Eingang: externes Postfach → eigenes Postfach. Dazu Ports, TLS-Zertifikate und die Postfix-Warteschlange.</p>
+      <div id="mon-status"></div>
+      <label class="check"><input type="checkbox" name="admin.enabled"> Monitoring aktiv (Cron-Eintrag wird automatisch angelegt)</label>
+      <div class="grid">
+        <label>Prüfen alle … Minuten <input name="admin.interval" type="number" min="1" max="60"></label>
+        <label>Servername in Meldungen <input name="general.name"></label>
+      </div>
+
+      <h3>Discord</h3>
+      <label>Webhook-URL <input type="password" name="discord.webhook_url" placeholder="https://discord.com/api/webhooks/…" autocomplete="new-password"><small id="mon-webhook-hint">Discord: Kanal bearbeiten → Integrationen → Webhooks → Neuer Webhook → URL kopieren.</small></label>
+      <label>Erwähnung bei Störung <input name="discord.mention" placeholder="optional, z. B. &lt;@123456789012345678&gt; oder &lt;@&amp;987654321&gt;"></label>
+
+      <h3>Eigenes Postfach (auf diesem Mailserver)</h3>
+      <p class="hint">Am besten ein eigenes Postfach nur für den Monitor anlegen, z. B. <code>monitor@deine-domain.de</code>.</p>
+      <div class="mon-acc" data-acc="server"></div>
+
+      <h3>Externes Postfach (fremder Anbieter)</h3>
+      <p class="hint">Postfach bei GMX, web.de, Gmail, Outlook … mit aktiviertem IMAP/SMTP (Gmail/Outlook: App-Passwort). GMX: <code>mail.gmx.net</code> / <code>imap.gmx.net</code>, Spam-Ordner <code>Spamverdacht</code>.</p>
+      <div class="mon-acc" data-acc="external"></div>
+
+      <h3>Weitere Prüfungen</h3>
+      <div class="grid">
+        <label class="check"><input type="checkbox" name="checks.outbound"> Ausgang prüfen</label>
+        <label class="check"><input type="checkbox" name="checks.inbound"> Eingang prüfen</label>
+        <label class="wide">Ports <input name="checks.ports" placeholder="mail.example.com:25, mail.example.com:587, mail.example.com:993"><small>Kommagetrennt <code>host:port</code>. Prüft Erreichbarkeit, Begrüßung und STARTTLS/SSL.</small></label>
+        <label>Zertifikat: warnen ab … Tagen <input name="checks.cert_warn_days" type="number" min="0"></label>
+        <label class="check"><input type="checkbox" name="checks.queue"> Postfix-Warteschlange prüfen</label>
+        <label>Warteschlange: Warnung ab <input name="checks.queue_warn" type="number" min="1"></label>
+        <label>Warteschlange: Störung ab <input name="checks.queue_fail" type="number" min="1"></label>
+      </div>
+
+      <h3>Benachrichtigung</h3>
+      <div class="grid">
+        <label>Melden nach … Fehlschlägen in Folge <input name="general.alert_after_failures" type="number" min="1"></label>
+        <label>Erneut erinnern alle … Minuten <input name="general.repeat_alert_minutes" type="number" min="0"><small>0 = nur einmal melden</small></label>
+        <label>Max. Wartezeit auf Testmails (Sek.) <input name="general.wait_seconds" type="number" min="30" max="900"></label>
+        <label class="check"><input type="checkbox" name="general.notify_recovery"> Entwarnung senden, wenn alles wieder geht</label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="primary">Speichern</button>
+        <button type="button" id="mon-webhook">Discord testen</button>
+        <button type="button" id="mon-run">Jetzt prüfen</button>
+      </div>
+      <details class="mon-log" id="mon-log-box" hidden>
+        <summary>Ausgabe des letzten Laufs</summary>
+        <pre id="mon-log"></pre>
+      </details>
+    </form>
+
     <details class="diag">
       <summary>API-Rohaufruf (Diagnose)</summary>
       <p class="hint">Zum Prüfen von Endpunkten. Pfad und Parameter aus den Browser-Devtools (F12 → Network) übernehmen.</p>
@@ -298,6 +350,7 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
         <dt>API-Präfixe</dt><dd><code>/v2,</code> = erst neue (<code>/v2/site</code>), dann klassische API (<code>/site</code>). Standard lassen.</dd>
         <dt>Branding</dt><dd>Portal-Name (Login-Seite, Browser-Tab, Seitenleiste ohne Logo) und Logo (PNG, JPG, SVG, WebP, GIF, max. 1 MB). Das Logo erscheint sofort nach dem Hochladen im Portal (Seite neu laden), ein Neustart ist nicht nötig. SVGs mit Skripten werden abgelehnt.</dd>
         <dt>Cloudflare</dt><dd>E-Mail + Global API Key + Server-IP: neue Websites/Subdomains bekommen automatisch A-/AAAA-Einträge; beim Löschen werden nur Einträge entfernt, die auf die eigene Server-IP zeigen. Leer lassen = DNS manuell.</dd>
+        <dt>Mail-Monitoring</dt><dd>Prüft im eingestellten Intervall mit echten Testmails Ausgang (eigenes → externes Postfach) und Eingang (externes → eigenes Postfach), dazu Ports, TLS-Zertifikate und die Postfix-Warteschlange. Störungen gehen an einen Discord-Webhook – erst nach X Fehlschlägen in Folge, dann höchstens alle Y Minuten erneut, plus Entwarnung. „Monitoring aktiv“ legt den Cron-Eintrag <code>/etc/cron.d/customer_mgr_mail_monitor</code> selbst an, ein eigener Cron-Job in aaPanel ist nicht nötig. Testmails werden nach dem Empfang gelöscht. „Jetzt prüfen“ startet sofort einen Lauf (dauert bis zu einigen Minuten).</dd>
       </dl>
 
       <h2 id="doc-updates">Updates &amp; Releases</h2>
@@ -313,6 +366,7 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
         <li>Datenbank: <code>/www/server/panel/data/customer_mgr/customer_mgr.db</code></li>
         <li>Einstellungen inkl. API-Schlüssel: <code>/www/server/panel/data/customer_mgr/config.json</code></li>
         <li>Logo fürs Kundenportal: <code>/www/server/panel/data/customer_mgr/logo.*</code></li>
+        <li>Mail-Monitoring: <code>mail_monitor.ini</code> (inkl. Passwörter), <code>mail_monitor_state.json</code> und <code>mail_monitor.log</code> im selben Ordner</li>
         <li>Diesen Ordner in die Server-Sicherung aufnehmen. Beim Deinstallieren des Plugins bleibt er erhalten (erst <code>bash install.sh purge</code> löscht ihn).</li>
       </ul>
 

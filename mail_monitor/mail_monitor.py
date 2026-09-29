@@ -18,7 +18,9 @@ Benachrichtigt wird erst nach `alert_after_failures` Fehlschlägen in Folge,
 danach höchstens alle `repeat_alert_minutes` erneut und einmal, sobald alles
 wieder funktioniert.
 
-Nur Python-Standardbibliothek (>= 3.7), z. B. per Cron alle 10 Minuten:
+Normalerweise wird alles in der Kundenverwaltung unter Einstellungen ->
+Mail-Monitoring eingerichtet (Konfiguration + Cron-Eintrag). Ohne Panel geht
+es auch von Hand, nur Python-Standardbibliothek (>= 3.7), z. B. per Cron:
 
   */10 * * * * python3 /pfad/mail_monitor.py -c /etc/mail_monitor.ini
 
@@ -655,10 +657,20 @@ def _lock(path):
     return fh
 
 
+PANEL_CONFIG = '/www/server/panel/data/customer_mgr/mail_monitor.ini'
+LEGACY_CONFIG = '/etc/mail_monitor.ini'
+
+
+def default_config():
+    return PANEL_CONFIG if os.path.isfile(PANEL_CONFIG) else LEGACY_CONFIG
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Prüft Ein- und Ausgang eines Mailservers '
                                              'und meldet Störungen per Discord.')
-    ap.add_argument('-c', '--config', default='/etc/mail_monitor.ini')
+    ap.add_argument('-c', '--config', default=default_config(),
+                    help='Standard: Konfiguration aus dem Panel (%s), sonst %s'
+                         % (PANEL_CONFIG, LEGACY_CONFIG))
     ap.add_argument('-v', '--verbose', action='store_true', help='Fortschritt ausgeben')
     ap.add_argument('--no-alert', action='store_true',
                     help='nichts an Discord senden, Zustand nicht ändern')

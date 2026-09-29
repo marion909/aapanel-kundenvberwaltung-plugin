@@ -19,7 +19,19 @@ Zertifikat …). Darum verschickt der Monitor bei jedem Lauf echte Testmails:
 Testmails werden nach dem Nachweis wieder gelöscht. Nur
 Python-Standardbibliothek, keine Installation nötig.
 
-## Einrichtung
+## Einrichtung im Panel (empfohlen)
+
+In der Kundenverwaltung unter **Einstellungen → Mail-Monitoring**: Postfächer
+und Discord-Webhook eintragen, „Monitoring aktiv“ anhaken, speichern. Das
+Plugin schreibt die Konfiguration nach
+`/www/server/panel/data/customer_mgr/mail_monitor.ini` (übersteht Updates)
+und legt den Cron-Eintrag `/etc/cron.d/customer_mgr_mail_monitor` selbst an.
+„Discord testen“ und „Jetzt prüfen“ gibt es dort ebenfalls, dazu die
+Ergebnisse des letzten Laufs. Eine vorhandene `/etc/mail_monitor.ini` wird
+beim ersten Öffnen übernommen – danach einen selbst angelegten Cron-Job
+löschen.
+
+## Einrichtung von Hand (ohne Panel)
 
 1. **Postfächer anlegen**
    - auf dem eigenen Server ein eigenes Postfach, z. B. `monitor@deine-domain.de`
