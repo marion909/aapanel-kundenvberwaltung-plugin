@@ -456,6 +456,39 @@ def parse_queue(output):
     return len(re.findall(r'^\s*\d+[smhdw]\s+\S+\s+\w{6}-\w{6,}-\w{2,}', text, re.M))
 
 
+def queue_details(output, spool='/var/spool/postfix'):
+    """Kurzbeschreibung, wo und warum Mails hängen (Postfix)."""
+    parts = []
+    counts = []
+    for q in ('maildrop', 'incoming', 'active', 'deferred', 'hold'):
+        n = 0
+        for _, _, files in os.walk(os.path.join(spool, q)):
+            n += len(files)
+        if n:
+            counts.append('%s %d' % (q, n))
+    if counts:
+        parts.append(', '.join(counts))
+    senders, reasons = {}, {}
+    for line in output.splitlines():
+        m = re.match(r'^[0-9A-Za-z]{6,}[*!]?\s+\d+\s+\w{3} \w{3}\s+\d+ [\d:]+\s+(\S+)', line)
+        if m:
+            senders[m.group(1)] = senders.get(m.group(1), 0) + 1
+            continue
+        m = re.match(r'^\s*\((.+)\)\s*$', line)
+        if m:
+            reason = re.sub(r'\s+', ' ', m.group(1))[:160]
+            reasons[reason] = reasons.get(reason, 0) + 1
+
+    def top(d):
+        k = max(d, key=d.get)
+        return '%dx %s' % (d[k], k)
+    if senders:
+        parts.append('häufigster Absender: ' + top(senders))
+    if reasons:
+        parts.append('häufigster Grund: ' + top(reasons))
+    return '; '.join(parts)
+
+
 def check_queue(cfg):
     cmd = cfg.queue_command.split() if cfg.queue_command else None
     if not cmd:
@@ -472,7 +505,12 @@ def check_queue(cfg):
         return Result('Warteschlange', WARN, '%s fehlgeschlagen: %s' % (' '.join(cmd), _err(e)))
     n = parse_queue(out)
     status = FAIL if n >= cfg.queue_fail else WARN if n >= cfg.queue_warn else OK
-    return Result('Warteschlange', status, '%d Mail(s) in der Warteschlange' % n)
+    msg = '%d Mail(s) in der Warteschlange' % n
+    if n:
+        details = queue_details(out)
+        if details:
+            msg += ' (%s)' % details
+    return Result('Warteschlange', status, msg)
 
 
 def run_checks(cfg, log):
