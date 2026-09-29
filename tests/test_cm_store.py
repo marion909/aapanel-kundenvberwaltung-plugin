@@ -176,6 +176,10 @@ class CmStoreTest(unittest.TestCase):
         pid = self.store.save_package({'name': 'Business', 'max_sites': '5', 'max_mailboxes': 10, 'ssl_allowed': False})
         p = self.store.get_package(pid)
         self.assertEqual((p['max_sites'], p['max_mailboxes'], p['ssl_allowed']), (5, 10, 0))
+        self.assertEqual((p['max_ftp'], p['ftp_allowed']), (0, 1))
+        pid2 = self.store.save_package({'name': 'NoFtp', 'max_ftp': 3, 'ftp_allowed': False})
+        self.assertEqual((self.store.get_package(pid2)['max_ftp'], self.store.get_package(pid2)['ftp_allowed']), (3, 0))
+        self.store.delete_package(pid2)
         with self.assertRaises(ValueError):
             self.store.save_package({'name': 'business'})  # Name eindeutig (ohne Groß/Klein)
         with self.assertRaises(ValueError):
@@ -205,6 +209,11 @@ class CmStoreTest(unittest.TestCase):
         self.assertEqual(eff({'max_sites': 0}, pkg, cfg)['site'], 0)   # Kunde: unbegrenzt
         self.assertEqual(eff({'max_sites': 8}, pkg, cfg)['site'], 8)
         self.assertTrue(eff({'max_sites': -1}, None, cfg)['ssl'])
+        # FTP: ohne Paket erlaubt/unbegrenzt, sonst laut Paket
+        self.assertEqual((lim['ftp'], lim['ftp_allowed']), (0, True))
+        self.assertFalse(eff({'max_sites': -1}, dict(pkg, max_ftp=2, ftp_allowed=0), cfg)['ftp_allowed'])
+        self.assertEqual(eff({'max_sites': -1}, dict(pkg, max_ftp=2), cfg)['ftp'], 2)
+        self.assertTrue(eff({'max_sites': -1}, None, cfg)['ftp_allowed'])
 
     def test_assign_enforces_package_limits_unless_forced(self):
         pid = self.store.save_package({'name': 'Mini', 'max_sites': 1, 'max_domains': 1})

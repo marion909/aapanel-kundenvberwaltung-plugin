@@ -10,7 +10,8 @@ import cm_resources
 class FakeApi(object):
     """Steht für cm_api.PanelApi, ohne echten Netzwerkzugriff."""
 
-    def __init__(self, sites=None, mail_domains=None, mailboxes_by_domain=None, sites_error=None):
+    def __init__(self, sites=None, mail_domains=None, mailboxes_by_domain=None, sites_error=None, ftps=None):
+        self.ftps = ftps or []
         self.sites = sites or []
         self.mail_domains = mail_domains or []
         self.mailboxes_by_domain = mailboxes_by_domain or {}
@@ -20,6 +21,9 @@ class FakeApi(object):
         if self.sites_error:
             raise self.sites_error
         return list(self.sites), []
+
+    def list_ftps(self, data_path):
+        return list(self.ftps)
 
     def list_mail_domains(self, paths, method):
         return list(self.mail_domains), paths[0]
@@ -54,6 +58,22 @@ class CmResourcesTest(unittest.TestCase):
         self.assertIn(('site', 'example.com'), idx)
         self.assertIn(('mail_domain', 'example.com'), idx)
         self.assertIn(('mailbox', 'info@example.com'), idx)
+
+    def test_ftp_accounts_are_linked_to_their_website(self):
+        api = FakeApi(
+            sites=[{'id': 1, 'name': 'Kunde.at', 'status': '1', 'path': '/www/wwwroot/kunde.at'},
+                   {'id': 2, 'name': 'shop.kunde.at', 'status': '1', 'path': '/www/wwwroot/kunde.at/shop'},
+                   {'id': 3, 'name': 'kunde.at.evil', 'status': '1', 'path': '/www/wwwroot/kunde.at.evil'}],
+            ftps=[{'id': 9, 'name': 'Web', 'path': '/www/wwwroot/kunde.at/', 'status': '1', 'ps': ''},
+                  {'id': 10, 'name': 'shop', 'path': '/www/wwwroot/kunde.at/shop/uploads', 'status': '0', 'ps': ''},
+                  {'id': 11, 'name': 'evil', 'path': '/www/wwwroot/kunde.at.evil', 'status': '1', 'ps': ''},
+                  {'id': 12, 'name': 'lose', 'path': '/srv/ftp', 'status': '1', 'ps': ''}],
+        )
+        with mock.patch('cm_resources.os.path.exists', return_value=False):
+            res = cm_resources.load_resources({'data_path': '/v2/data', 'site_project_types': ''}, api=api)
+        self.assertEqual({f['name']: f['site'] for f in res['ftps']},
+                         {'web': 'kunde.at', 'shop': 'shop.kunde.at', 'evil': 'kunde.at.evil', 'lose': ''})
+        self.assertIn(('ftp', 'web'), cm_resources.index_resources(res))
 
     def test_fetch_mail_reports_not_installed_when_absent(self):
         api = FakeApi()

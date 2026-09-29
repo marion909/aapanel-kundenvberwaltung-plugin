@@ -6,6 +6,7 @@ const resources = require('../lib/resources');
 const stats = require('../lib/stats');
 const { ApiError } = require('../lib/api');
 const { SiteService } = require('../lib/sites');
+const { FtpService } = require('../lib/ftp');
 
 const DISK_WAIT_MS = 2500;
 
@@ -36,6 +37,11 @@ const ACTION_LABELS = {
   portal_files_delete: 'Dateien gelöscht',
   portal_files_edit: 'Datei bearbeitet',
   portal_files_extract: 'Archiv entpackt',
+  portal_ftp_create: 'FTP-Zugang angelegt',
+  portal_ftp_password: 'FTP-Passwort geändert',
+  portal_ftp_enable: 'FTP-Zugang aktiviert',
+  portal_ftp_disable: 'FTP-Zugang gesperrt',
+  portal_ftp_delete: 'FTP-Zugang gelöscht',
 };
 
 function journalDetail(raw) {
@@ -139,6 +145,44 @@ module.exports = function registerOverviewRoutes(app, { loginRequired, asyncHand
       const usable = asg.filter((a) => a.state !== 'missing');
       if (usable.length === 1) return res.redirect(`/sites/${usable[0].id}/files`);
       res.render('files-index', { title: 'Dateiverwaltung', sites: usable });
+    })
+  );
+
+  // FTP: alle Zugänge des Kunden, angelegt wird pro Website
+  app.get(
+    '/ftp',
+    loginRequired,
+    asyncHandler(async (req, res) => {
+      const { cfg, asg } = await liveSites(req);
+      const usable = asg.filter((a) => a.state !== 'missing');
+      const ftp = new FtpService(new SiteService({ cfg, store: req.store, customer: req.customer }));
+      let accounts = [];
+      let error = null;
+      try {
+        accounts = await ftp.accounts();
+      } catch (e) {
+        if (!(e instanceof ApiError)) throw e;
+        error = e.message;
+      }
+      // Zugang -> Website (tiefstes Website-Verzeichnis, das den FTP-Pfad enthält)
+      for (const a of accounts) {
+        if (a.state !== 'ok') continue;
+        let best = null;
+        for (const s of usable) {
+          const root = String((s.info && s.info.path) || '').replace(/\/+$/, '');
+          if (root && (a.path === root || a.path.startsWith(root + '/')) && (!best || root.length > best.root.length)) {
+            best = { root, site: s };
+          }
+        }
+        if (best) {
+          a.site = best.site;
+          a.rel = '/' + a.path.slice(best.root.length).replace(/^\/+/, '');
+        }
+      }
+      res.render('ftp-index', {
+        title: 'FTP', sites: usable, accounts, error,
+        allowed: ftp.allowed(), quota: ftp.quota(), host: ftp.host(req.hostname),
+      });
     })
   );
 

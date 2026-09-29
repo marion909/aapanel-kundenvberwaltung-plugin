@@ -7,7 +7,7 @@
 <p class="hint mono"><%= site.path %></p>
 
 <nav class="tabs">
-  <% [['overview','Übersicht'],['domains','Domains'],['ssl','SSL'],['redirects','Weiterleitungen'],['rewrite','Rewrite'],['files','Dateimanager'],['logs','Logs'],['delete','Löschen']].forEach(function (t) { %>
+  <% [['overview','Übersicht'],['domains','Domains'],['ssl','SSL'],['redirects','Weiterleitungen'],['rewrite','Rewrite'],['files','Dateimanager'],['ftp','FTP'],['logs','Logs'],['delete','Löschen']].forEach(function (t) { %>
   <a href="/sites/<%= row.id %>/<%= t[0] %>" class="<%= tab === t[0] ? 'on' : '' %>"><%= t[1] %></a>
   <% }) %>
 </nav>
@@ -202,10 +202,62 @@
   <pre class="log"><%= log || '(leer)' %></pre>
 </section>
 
+<% } else if (tab === 'ftp') { %>
+<section class="box">
+  <h2>FTP-Zugänge</h2>
+  <p class="hint">Server: <strong class="mono"><%= ftp.host || '–' %></strong> · Port 21 · FTP mit TLS (explizit) empfohlen.
+    Ein FTP-Zugang sieht nur sein Verzeichnis innerhalb dieser Website.</p>
+  <% if (!ftp.accounts.length) { %><p class="empty">Noch keine FTP-Zugänge für diese Website.</p><% } else { %>
+  <table class="res">
+    <thead><tr><th>Benutzer</th><th>Verzeichnis</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    <% ftp.accounts.forEach(function (a) { %>
+      <tr><td class="mono"><%= a.name %></td><td class="mono"><%= a.rel %></td>
+      <td><% if (a.active) { %><span class="badge on">aktiv</span><% } else { %><span class="badge off">gesperrt</span><% } %></td>
+      <td class="actions">
+        <form method="post" action="/sites/<%= row.id %>/ftp/<%= a.asg.id %>/password" class="inline">
+          <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+          <input type="password" name="password" placeholder="neues Passwort (leer = erzeugen)" autocomplete="new-password">
+          <button type="submit">Passwort ändern</button>
+        </form>
+        <form method="post" action="/sites/<%= row.id %>/ftp/<%= a.asg.id %>/status" class="inline">
+          <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+          <input type="hidden" name="enabled" value="<%= a.active ? '0' : '1' %>">
+          <button type="submit"><%= a.active ? 'Sperren' : 'Aktivieren' %></button>
+        </form>
+        <form method="post" action="/sites/<%= row.id %>/ftp/<%= a.asg.id %>/delete" class="inline" data-confirm="FTP-Zugang „<%= a.name %>“ löschen? Die Dateien bleiben erhalten.">
+          <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+          <button type="submit" class="danger">Löschen</button>
+        </form>
+      </td></tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+<section class="box">
+  <h2>Neuer FTP-Zugang</h2>
+  <% if (!ftp.allowed) { %>
+  <p class="empty">FTP-Zugänge sind in Ihrem Paket nicht enthalten.</p>
+  <% } else if (ftp.quota.max && ftp.quota.used >= ftp.quota.max) { %>
+  <p class="empty">FTP-Limit Ihres Pakets erreicht (<%= ftp.quota.used %> von <%= ftp.quota.max %>).</p>
+  <% } else { %>
+  <form method="post" action="/sites/<%= row.id %>/ftp/add" class="panel-form">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <label>Benutzername <input type="text" name="username" required pattern="[a-z0-9][a-z0-9_.\-]{2,31}" autocomplete="off" placeholder="z. B. <%= site.name.split('.')[0].replace(/[^a-z0-9]/g, '') %>_ftp"></label>
+    <label>Passwort <input type="password" name="password" autocomplete="new-password" placeholder="leer lassen = sicheres Passwort erzeugen"></label>
+    <label>Verzeichnis <input type="text" name="dir" value="/" placeholder="/ oder z. B. /public/uploads">
+      <small>Relativ zum Website-Verzeichnis. Fehlende Ordner werden angelegt.</small></label>
+    <button type="submit" class="primary">Anlegen</button>
+  </form>
+  <p class="hint"><% if (ftp.quota.max) { %><%= ftp.quota.used %> von <%= ftp.quota.max %> FTP-Zugängen genutzt. <% } %>Passwort: mind. 8 Zeichen mit Buchstaben und Ziffern, keine Leerzeichen, Anführungszeichen oder $.</p>
+  <% } %>
+</section>
+
 <% } else if (tab === 'delete') { %>
 <section class="box danger-zone">
   <h2>Website löschen</h2>
-  <p>Die Website <strong><%= site.name %></strong> wird aus aaPanel entfernt. Das kann nicht rückgängig gemacht werden.</p>
+  <p>Die Website <strong><%= site.name %></strong> wird aus aaPanel entfernt. Das kann nicht rückgängig gemacht werden. FTP-Zugänge dieser Website werden mitgelöscht.</p>
   <form method="post" action="/sites/<%= row.id %>/delete" class="panel-form">
     <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
     <label class="check"><input type="checkbox" name="delete_files" value="1"> Auch alle Dateien im Website-Verzeichnis löschen</label>

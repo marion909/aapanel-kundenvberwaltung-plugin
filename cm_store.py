@@ -36,6 +36,7 @@ DEFAULT_CFG = {
     'server_ipv4': '',
     'server_ipv6': '',
     'portal_name': 'KundenPortal',        # Name im Kundenportal (Seitenleiste, Login, Titel)
+    'ftp_host': '',                       # FTP-Server-Adresse für Kunden (leer = Server-IPv4)
 }
 
 PBKDF2_ITERATIONS = 600000  # aktuelle OWASP-Empfehlung für PBKDF2-SHA256
@@ -90,6 +91,8 @@ CREATE TABLE IF NOT EXISTS packages (
   mailbox_quota_mb INTEGER NOT NULL DEFAULT 0,
   max_upload_mb INTEGER NOT NULL DEFAULT 0,
   ssl_allowed INTEGER NOT NULL DEFAULT 1,
+  ftp_allowed INTEGER NOT NULL DEFAULT 1,
+  max_ftp INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -125,6 +128,8 @@ _MIGRATIONS = (
     ('customers', 'portal_last_login', "INTEGER NOT NULL DEFAULT 0"),
     ('customers', 'max_sites', "INTEGER NOT NULL DEFAULT -1"),
     ('customers', 'package_id', "INTEGER"),
+    ('packages', 'ftp_allowed', "INTEGER NOT NULL DEFAULT 1"),
+    ('packages', 'max_ftp', "INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -134,6 +139,9 @@ def _column_exists(db, table, col):
 
 def _migrate(db):
     for table, col, decl in _MIGRATIONS:
+        # Tabellen, die es (noch) nicht gibt, legt SCHEMA vollständig an
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+            continue
         if not _column_exists(db, table, col):
             db.execute('ALTER TABLE {} ADD COLUMN {} {}'.format(table, col, decl))
     db.commit()
@@ -141,7 +149,7 @@ def _migrate(db):
 
 CUSTOMER_FIELDS = ('company', 'first_name', 'last_name', 'email', 'phone', 'street',
                    'zip', 'city', 'country', 'vat_id', 'note', 'status')
-TYPES = ('site', 'mail_domain', 'mailbox', 'domain')
+TYPES = ('site', 'mail_domain', 'mailbox', 'domain', 'ftp')
 
 _LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
 
@@ -196,12 +204,12 @@ def save_cfg(cfg):
 # ---------- Hosting-Pakete ----------
 # Alle Limits sind Anzahlen; 0 = unbegrenzt. mailbox_quota_mb/max_upload_mb: 0 = Standard aus den Einstellungen.
 PACKAGE_INT_FIELDS = ('max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes',
-                      'mailbox_quota_mb', 'max_upload_mb')
+                      'mailbox_quota_mb', 'max_upload_mb', 'max_ftp')
 # Zuordnungstyp -> Paketfeld
 LIMIT_FIELD = {'site': 'max_sites', 'domain': 'max_domains', 'mail_domain': 'max_mail_domains',
-               'mailbox': 'max_mailboxes'}
+               'mailbox': 'max_mailboxes', 'ftp': 'max_ftp'}
 LIMIT_LABEL = {'site': 'Websites', 'domain': 'Domain-Bereiche', 'mail_domain': 'Mail-Domains',
-               'mailbox': 'Postfächer'}
+               'mailbox': 'Postfächer', 'ftp': 'FTP-Zugänge'}
 
 
 class LimitError(ValueError):
@@ -231,6 +239,8 @@ def effective_limits(customer, package, cfg):
         'mailbox_quota_mb': int(pkg.get('mailbox_quota_mb') or 0),
         'upload_mb': int(pkg.get('max_upload_mb') or 0) or int(cfg.get('portal_max_upload_mb') or 512),
         'ssl': bool(pkg.get('ssl_allowed', 1)) if package else True,
+        'ftp': int(pkg.get('max_ftp') or 0),
+        'ftp_allowed': bool(pkg.get('ftp_allowed', 1)) if package else True,
     }
 
 
@@ -556,6 +566,7 @@ class Store(object):
                 raise ValueError('Limits dürfen nicht negativ sein (0 = unbegrenzt)')
             vals[k] = v
         vals['ssl_allowed'] = 1 if data.get('ssl_allowed', True) not in (False, 0, '0', 'false', '') else 0
+        vals['ftp_allowed'] = 1 if data.get('ftp_allowed', True) not in (False, 0, '0', 'false', '') else 0
         now = int(time.time())
         pid = data.get('id')
         dup = self.db.execute('SELECT id FROM packages WHERE name=? COLLATE NOCASE AND id<>?',

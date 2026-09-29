@@ -248,6 +248,7 @@ class customer_mgr_main:
         out['sites'] = [dict(s, owner=owners.get(('site', s['name']))) for s in res['sites']]
         out['mail_domains'] = [dict(d, owner=owners.get(('mail_domain', d['domain']))) for d in res['mail_domains']]
         out['mailboxes'] = [dict(b, owner=owners.get(('mailbox', b['username']))) for b in res['mailboxes']]
+        out['ftps'] = [dict(f, owner=owners.get(('ftp', f['name']))) for f in res.get('ftps', [])]
         return _ok(out)
 
     @endpoint
@@ -312,6 +313,11 @@ class customer_mgr_main:
         for b in res['mailboxes']:
             if b['domain'] == d:
                 items.append({'type': 'mailbox', 'ref_name': b['username']})
+        # FTP-Konten, die in eine Website dieser Domain zeigen
+        for f in res.get('ftps', []):
+            site = f.get('site') or ''
+            if site and (site == d or site.endswith('.' + d)):
+                items.append({'type': 'ftp', 'ref_name': f['name']})
         return _ok(items)
 
     @endpoint
@@ -378,7 +384,7 @@ class customer_mgr_main:
                   'mail_domains_method', 'mail_boxes_method', 'customer_prefix',
                   'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method',
                   'mail_box_default_quota', 'site_api_prefixes', 'site_path_template',
-                  'cf_email', 'server_ipv4', 'server_ipv6'):
+                  'cf_email', 'server_ipv4', 'server_ipv6', 'ftp_host'):
             if k in data:
                 cfg[k] = str(data[k] or '').strip()
         if 'portal_name' in data:

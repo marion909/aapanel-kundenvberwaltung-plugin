@@ -45,6 +45,32 @@ def fetch_sites(api, cfg, warnings):
     raise cm_api.ApiError('Websites konnten nicht geladen werden: {}'.format(last))
 
 
+def fetch_ftps(api, cfg, warnings):
+    """FTP-Konten aus aaPanel (best effort - ohne FTP-Server einfach leer)."""
+    paths = [cfg.get('data_path') or '/v2/data']
+    paths += [p for p in ('/v2/data', '/data') if p not in paths]
+    last = None
+    for p in paths:
+        try:
+            return api.list_ftps(p)
+        except cm_api.ApiError as e:
+            last = e
+    warnings.append('FTP-Konten konnten nicht geladen werden: {}'.format(last))
+    return []
+
+
+def ftp_site(ftp, sites):
+    """Website, in deren Verzeichnis das FTP-Konto liegt (tiefster Treffer), sonst ''."""
+    fp = str(ftp.get('path') or '').rstrip('/')
+    best = ''
+    best_len = -1
+    for s in sites:
+        root = str(s.get('path') or '').rstrip('/')
+        if root and (fp == root or fp.startswith(root + '/')) and len(root) > best_len:
+            best, best_len = str(s['name']).lower(), len(root)
+    return best
+
+
 def _mail_db_rows(sql):
     con = sqlite3.connect('file:{}?mode=ro'.format(MAIL_DB), uri=True, timeout=5)
     con.row_factory = sqlite3.Row
@@ -89,14 +115,18 @@ def load_resources(cfg, api=None):
     except cm_api.ApiError as e:
         domains, boxes, mail_src = [], [], 'Fehler'
         warnings.append(str(e))
+    ftps = fetch_ftps(api, cfg, warnings)
     for s in sites:
         s['name'] = str(s['name']).lower()
+    for f in ftps:
+        f['name'] = str(f['name']).lower()
+        f['site'] = ftp_site(f, sites)
     for d in domains:
         d['domain'] = str(d['domain']).lower()
     for b in boxes:
         b['username'] = str(b['username']).lower()
         b['domain'] = str(b.get('domain') or b['username'].split('@')[-1]).lower()
-    return {'sites': sites, 'mail_domains': domains, 'mailboxes': boxes,
+    return {'sites': sites, 'mail_domains': domains, 'mailboxes': boxes, 'ftps': ftps,
             'sources': {'sites': site_src, 'mail': mail_src},
             'warnings': warnings, 'fetched_at': time.strftime('%Y-%m-%d %H:%M:%S')}
 
@@ -109,6 +139,8 @@ def index_resources(res):
         idx[('mail_domain', d['domain'])] = d
     for b in res['mailboxes']:
         idx[('mailbox', b['username'])] = b
+    for f in res.get('ftps', []):
+        idx[('ftp', f['name'])] = f
     return idx
 
 
