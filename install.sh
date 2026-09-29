@@ -56,6 +56,8 @@ install() {
 
 uninstall() {
   menu_remove
+  # Cron-Eintrag des Mail-Monitorings (Einstellungen -> Mail-Monitoring)
+  rm -f /etc/cron.d/customer_mgr_mail_monitor
   # Kundendaten bleiben bewusst erhalten: $DATA
   if [ -d "$PANEL/plugin/$PLUGIN/portal" ]; then
     echo 'Hinweis: Falls der Node.js-Projektmanager auf plugin/'"$PLUGIN"'/portal zeigt, wird dessen Prozess durch das Loeschen jetzt funktionsunfaehig.'

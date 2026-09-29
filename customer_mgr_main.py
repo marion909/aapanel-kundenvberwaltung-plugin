@@ -15,6 +15,7 @@ import public
 import cm_store
 import cm_api
 import cm_resources
+import cm_monitor
 
 
 def _reload_changed_modules():
@@ -24,8 +25,8 @@ def _reload_changed_modules():
     'assign_domain'"). Hat sich eines geändert, werden alle drei in
     Abhängigkeitsreihenfolge neu geladen (cm_resources importiert cm_api -
     sonst passen z. B. die ApiError-Klassen nicht mehr zusammen)."""
-    global cm_store, cm_api, cm_resources
-    mods = (cm_store, cm_api, cm_resources)
+    global cm_store, cm_api, cm_resources, cm_monitor
+    mods = (cm_store, cm_api, cm_resources, cm_monitor)
     stamps = []
     for m in mods:
         try:
@@ -37,7 +38,8 @@ def _reload_changed_modules():
     cm_store = importlib.reload(cm_store)
     cm_api = importlib.reload(cm_api)
     cm_resources = importlib.reload(cm_resources)
-    for m, t in zip((cm_store, cm_api, cm_resources), stamps):
+    cm_monitor = importlib.reload(cm_monitor)
+    for m, t in zip((cm_store, cm_api, cm_resources, cm_monitor), stamps):
         m._cm_loaded_mtime = t
 
 
@@ -445,6 +447,37 @@ class customer_mgr_main:
         except cm_api.ApiError as e:
             checks.append({'label': 'API-Aufruf', 'ok': False, 'detail': str(e)})
             return _ok({'checks': checks, 'summary': 'API-Aufruf fehlgeschlagen.'})
+
+    # ================= Mail-Monitoring =================
+    @endpoint
+    def get_monitor(self, args):
+        values, legacy = cm_monitor.load()
+        pub, secrets = cm_monitor.public_values(values)
+        return _ok({'values': pub, 'secrets': secrets, 'legacy_import': legacy,
+                    'status': cm_monitor.status(values), 'command': cm_monitor.command(),
+                    'config_file': cm_monitor.INI_FILE})
+
+    @endpoint
+    def monitor_status(self, args):
+        return _ok(cm_monitor.status())
+
+    @endpoint
+    def save_monitor(self, args):
+        values = cm_monitor.save(_payload(args))
+        if values['admin.enabled']:
+            msg = 'Mail-Monitoring gespeichert – Prüfung alle {} Minuten'.format(values['admin.interval'])
+        else:
+            msg = 'Mail-Monitoring gespeichert (deaktiviert)'
+        return _ok(None, msg)
+
+    @endpoint
+    def monitor_test_webhook(self, args):
+        return _ok(None, cm_monitor.test_webhook() or 'Testnachricht gesendet')
+
+    @endpoint
+    def monitor_run(self, args):
+        cm_monitor.run_now()
+        return _ok({'started': time.time()}, 'Prüfung gestartet – dauert bis zu einigen Minuten')
 
     @endpoint
     def raw_call(self, args):

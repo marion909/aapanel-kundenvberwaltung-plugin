@@ -65,6 +65,23 @@ class QueueTest(unittest.TestCase):
         self.assertEqual(mm.parse_queue(out), 3)
         self.assertEqual(mm.parse_queue('-- 1 Kbytes in 1 Request.'), 1)
 
+    def test_details(self):
+        out = ('-Queue ID-  --Size-- ----Arrival Time---- -Sender/Recipient-------\n'
+               'A1B2C3D4E5     1234 Mon Sep 29 10:00:00  root@mail.example.com\n'
+               '(connect to gmx.net[1.2.3.4]:25: Connection timed out)\n'
+               '                                         a@gmx.net\n\n'
+               'B1B2C3D4E5!    1234 Mon Sep 29 10:05:00  root@mail.example.com\n'
+               '(connect to gmx.net[1.2.3.4]:25: Connection timed out)\n'
+               '                                         a@gmx.net\n\n'
+               '-- 3 Kbytes in 2 Requests.\n')
+        with tempfile.TemporaryDirectory() as spool:
+            os.makedirs(os.path.join(spool, 'deferred', 'A'))
+            open(os.path.join(spool, 'deferred', 'A', 'A1B2C3D4E5'), 'w').close()
+            d = mm.queue_details(out, spool)
+        self.assertIn('deferred 1', d)
+        self.assertIn('2x root@mail.example.com', d)
+        self.assertIn('2x connect to gmx.net', d)
+
 
 class DecideTest(unittest.TestCase):
     def setUp(self):

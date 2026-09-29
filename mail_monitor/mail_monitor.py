@@ -18,7 +18,9 @@ Benachrichtigt wird erst nach `alert_after_failures` Fehlschlägen in Folge,
 danach höchstens alle `repeat_alert_minutes` erneut und einmal, sobald alles
 wieder funktioniert.
 
-Nur Python-Standardbibliothek (>= 3.7), z. B. per Cron alle 10 Minuten:
+Normalerweise wird alles in der Kundenverwaltung unter Einstellungen ->
+Mail-Monitoring eingerichtet (Konfiguration + Cron-Eintrag). Ohne Panel geht
+es auch von Hand, nur Python-Standardbibliothek (>= 3.7), z. B. per Cron:
 
   */10 * * * * python3 /pfad/mail_monitor.py -c /etc/mail_monitor.ini
 
@@ -173,8 +175,15 @@ class Config(object):
 
 def load_config(path):
     parser = configparser.ConfigParser(interpolation=None)
-    if not parser.read(path, encoding='utf-8'):
-        raise ConfigError('Konfiguration nicht lesbar: %s' % path)
+    if not os.path.isfile(path):
+        example = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               'mail_monitor.example.ini')
+        raise ConfigError('%s existiert nicht. Vorlage kopieren und anpassen:\n'
+                          '  cp %s %s && chmod 600 %s' % (path, example, path, path))
+    try:
+        parser.read(path, encoding='utf-8')
+    except (OSError, configparser.Error) as e:
+        raise ConfigError('%s nicht lesbar: %s' % (path, e))
     try:
         return Config(parser)
     except ValueError as e:
@@ -449,6 +458,39 @@ def parse_queue(output):
     return len(re.findall(r'^\s*\d+[smhdw]\s+\S+\s+\w{6}-\w{6,}-\w{2,}', text, re.M))
 
 
+def queue_details(output, spool='/var/spool/postfix'):
+    """Kurzbeschreibung, wo und warum Mails hängen (Postfix)."""
+    parts = []
+    counts = []
+    for q in ('maildrop', 'incoming', 'active', 'deferred', 'hold'):
+        n = 0
+        for _, _, files in os.walk(os.path.join(spool, q)):
+            n += len(files)
+        if n:
+            counts.append('%s %d' % (q, n))
+    if counts:
+        parts.append(', '.join(counts))
+    senders, reasons = {}, {}
+    for line in output.splitlines():
+        m = re.match(r'^[0-9A-Za-z]{6,}[*!]?\s+\d+\s+\w{3} \w{3}\s+\d+ [\d:]+\s+(\S+)', line)
+        if m:
+            senders[m.group(1)] = senders.get(m.group(1), 0) + 1
+            continue
+        m = re.match(r'^\s*\((.+)\)\s*$', line)
+        if m:
+            reason = re.sub(r'\s+', ' ', m.group(1))[:160]
+            reasons[reason] = reasons.get(reason, 0) + 1
+
+    def top(d):
+        k = max(d, key=d.get)
+        return '%dx %s' % (d[k], k)
+    if senders:
+        parts.append('häufigster Absender: ' + top(senders))
+    if reasons:
+        parts.append('häufigster Grund: ' + top(reasons))
+    return '; '.join(parts)
+
+
 def check_queue(cfg):
     cmd = cfg.queue_command.split() if cfg.queue_command else None
     if not cmd:
@@ -465,7 +507,12 @@ def check_queue(cfg):
         return Result('Warteschlange', WARN, '%s fehlgeschlagen: %s' % (' '.join(cmd), _err(e)))
     n = parse_queue(out)
     status = FAIL if n >= cfg.queue_fail else WARN if n >= cfg.queue_warn else OK
-    return Result('Warteschlange', status, '%d Mail(s) in der Warteschlange' % n)
+    msg = '%d Mail(s) in der Warteschlange' % n
+    if n:
+        details = queue_details(out)
+        if details:
+            msg += ' (%s)' % details
+    return Result('Warteschlange', status, msg)
 
 
 def run_checks(cfg, log):
@@ -610,10 +657,20 @@ def _lock(path):
     return fh
 
 
+PANEL_CONFIG = '/www/server/panel/data/customer_mgr/mail_monitor.ini'
+LEGACY_CONFIG = '/etc/mail_monitor.ini'
+
+
+def default_config():
+    return PANEL_CONFIG if os.path.isfile(PANEL_CONFIG) else LEGACY_CONFIG
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Prüft Ein- und Ausgang eines Mailservers '
                                              'und meldet Störungen per Discord.')
-    ap.add_argument('-c', '--config', default='/etc/mail_monitor.ini')
+    ap.add_argument('-c', '--config', default=default_config(),
+                    help='Standard: Konfiguration aus dem Panel (%s), sonst %s'
+                         % (PANEL_CONFIG, LEGACY_CONFIG))
     ap.add_argument('-v', '--verbose', action='store_true', help='Fortschritt ausgeben')
     ap.add_argument('--no-alert', action='store_true',
                     help='nichts an Discord senden, Zustand nicht ändern')

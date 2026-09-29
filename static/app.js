@@ -59,7 +59,7 @@
     $$('.views button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
     $$('.view').forEach((s) => { s.hidden = s.id !== 'view-' + v; });
     if (v === 'resources') loadResources(false);
-    if (v === 'settings') loadSettings();
+    if (v === 'settings') { loadSettings(); loadMonitor(); }
     if (v === 'packages') loadPackages();
   }
 
@@ -681,6 +681,116 @@
       const r = await api('raw_call', { payload: { path: $('#raw-path').value.trim(), params } });
       out.textContent = typeof r.data === 'string' ? r.data : JSON.stringify(r.data, null, 2);
     } catch (e) { out.textContent = 'Fehler: ' + e.message; }
+  });
+
+  // ---------- Mail-Monitoring ----------
+  const monForm = $('#monitor-form');
+  $$('.mon-acc', monForm).forEach((box) => {
+    const a = box.dataset.acc;
+    const sec = (n) => `<select name="${a}.${n}"><option value="ssl">SSL/TLS</option><option value="starttls">STARTTLS</option><option value="none">keine</option></select>`;
+    box.innerHTML = `<div class="grid">
+      <label>E-Mail-Adresse <input name="${a}.address" type="email"></label>
+      <label>Passwort <input name="${a}.password" type="password" placeholder="unverändert lassen" autocomplete="new-password"><small data-secret="${a}.password"></small></label>
+      <label>SMTP-Server <input name="${a}.smtp_host"></label>
+      <label>SMTP-Verschlüsselung / Port ${sec('smtp_security')}<input name="${a}.smtp_port" type="number" min="1" max="65535" placeholder="Standard (587 / 465)"></label>
+      <label>IMAP-Server <input name="${a}.imap_host" placeholder="leer = wie SMTP-Server"></label>
+      <label>IMAP-Verschlüsselung / Port ${sec('imap_security')}<input name="${a}.imap_port" type="number" min="1" max="65535" placeholder="Standard (993)"></label>
+      <label>Benutzername <input name="${a}.user" placeholder="leer = E-Mail-Adresse"></label>
+      <label>Ordner <input name="${a}.folders" placeholder="INBOX"></label>
+      ${a === 'external' ? `<label class="wide">Spam-Ordner <input name="${a}.spam_folders" placeholder="z. B. Spamverdacht, Junk, [Gmail]/Spam"><small>Landet die Testmail dort, gibt es eine Warnung (Reputation, SPF/DKIM prüfen).</small></label>` : ''}
+    </div>`;
+  });
+
+  const MON_ICON = { ok: 'ok', warn: 'wn', fail: 'no' };
+  let monPoll = null;
+
+  function renderMonitorStatus(st, enabled) {
+    const box = $('#mon-status');
+    let html = '';
+    if (!st.script_exists) html += '<div class="err">Prüfskript <code>mail_monitor/mail_monitor.py</code> fehlt im Plugin-Ordner – Plugin neu installieren.</div>';
+    if (enabled && st.stale) html += '<div class="warn">Die letzte Prüfung ist schon länger her – läuft der Cron-Dienst? (<code>systemctl status cron</code>)</div>';
+    if (st.legacy_ini) html += '<div class="warn">Es gibt noch eine alte Konfiguration <code>/etc/mail_monitor.ini</code>. Nach dem Speichern hier einen selbst angelegten Cron-Job für <code>mail_monitor.py</code> (z. B. in aaPanel → Cron) löschen, sonst wird doppelt geprüft.</div>';
+    if (st.running) {
+      html += '<div class="mon-box"><strong>Prüfung läuft …</strong> <span class="hint">Warte auf die Testmails.</span></div>';
+    } else if (st.last_run) {
+      const cls = { ok: 'ok', warn: 'warn-s', fail: 'fail' }[st.last_status] || '';
+      const word = { ok: 'Alles in Ordnung', warn: 'Warnung', fail: 'Störung' }[st.last_status] || st.last_status;
+      html += `<div class="mon-box ${cls}"><strong>${esc(word)}</strong> <span class="hint">– letzte Prüfung ${esc(fmtTime(st.last_run))}${st.failures > 1 ? ', ' + st.failures + '× in Folge' : ''}${st.alerted ? ', Discord benachrichtigt' : ''}</span>
+        <ul class="checks">${st.results.map((r) => `<li class="${MON_ICON[r.status] || 'no'}"><span><strong>${esc(r.name)}</strong> – ${esc(r.message)}</span></li>`).join('')}</ul></div>`;
+    } else if (enabled) {
+      html += '<div class="mon-box"><span class="hint">Noch keine Prüfung gelaufen.</span></div>';
+    }
+    box.innerHTML = html;
+    $('#mon-log').textContent = st.log || '';
+    $('#mon-log-box').hidden = !st.log;
+  }
+
+  async function loadMonitor() {
+    try {
+      const d = (await api('get_monitor')).data;
+      Object.entries(d.values).forEach(([k, v]) => {
+        const el = monForm.elements[k];
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = !!v; else el.value = v == null ? '' : v;
+      });
+      Object.entries(d.secrets).forEach(([k, set]) => {
+        const el = monForm.elements[k];
+        if (el) el.value = '';
+        const hint = monForm.querySelector(`[data-secret="${k}"]`);
+        if (hint) hint.textContent = set ? 'Hinterlegt. Nur ausfüllen, um es zu ändern.' : '';
+      });
+      $('#mon-webhook-hint').textContent = d.secrets['discord.webhook_url']
+        ? 'Hinterlegt. Nur ausfüllen, um die URL zu ändern.'
+        : 'Discord: Kanal bearbeiten → Integrationen → Webhooks → Neuer Webhook → URL kopieren.';
+      renderMonitorStatus(d.status, d.values['admin.enabled']);
+      if (d.legacy_import) toast('Werte aus /etc/mail_monitor.ini übernommen – bitte prüfen und speichern');
+    } catch (e) { toast(e.message, true); }
+  }
+
+  function monitorPayload() {
+    const data = Object.fromEntries(new FormData(monForm).entries());
+    $$('input[type=checkbox]', monForm).forEach((c) => { data[c.name] = c.checked; });
+    return data;
+  }
+
+  monForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try { const r = await api('save_monitor', { payload: monitorPayload() }); toast(r.msg); loadMonitor(); }
+    catch (e) { toast(e.message, true); }
+  });
+
+  $('#mon-webhook').addEventListener('click', async (ev) => {
+    const b = ev.target;
+    b.disabled = true;
+    try { const r = await api('monitor_test_webhook'); toast(r.msg); }
+    catch (e) { toast(e.message, true); }
+    finally { b.disabled = false; }
+  });
+
+  $('#mon-run').addEventListener('click', async (ev) => {
+    const b = ev.target;
+    b.disabled = true;
+    let before = null;
+    try {
+      before = (await api('monitor_status')).data.last_run;
+      const r = await api('monitor_run');
+      toast(r.msg);
+    } catch (e) { toast(e.message, true); b.disabled = false; return; }
+    const started = Date.now();
+    clearInterval(monPoll);
+    monPoll = setInterval(async () => {
+      try {
+        const st = (await api('monitor_status')).data;
+        const done = st.last_run && st.last_run !== before && !st.running;
+        renderMonitorStatus(done || Date.now() - started > 3000 ? st : Object.assign({}, st, { running: true }),
+          monForm.elements['admin.enabled'].checked);
+        if (done || Date.now() - started > 16 * 60 * 1000 || (!st.running && Date.now() - started > 15000 && st.log && /Konfigurationsfehler|Traceback/.test(st.log))) {
+          clearInterval(monPoll);
+          b.disabled = false;
+          if (done) toast('Prüfung abgeschlossen', st.last_status === 'fail');
+        }
+      } catch (e) { clearInterval(monPoll); b.disabled = false; toast(e.message, true); }
+    }, 4000);
   });
 
   // ---------- Start ----------
