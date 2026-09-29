@@ -8,6 +8,9 @@ Dateimanager mit Upload) und Postfächer selbst verwalten.
 - Admin-Plugin: `customer_mgr_main.py`, `cm_*.py`, `templates/`, `static/`
 - Kundenportal: `portal/` – Deployment und Funktionsumfang siehe
   [`portal/README.md`](portal/README.md)
+- Mail-Monitor: `mail_monitor/` – prüft per echter Testmail, ob der Mailserver
+  senden und empfangen kann, und meldet Störungen per Discord-Webhook, siehe
+  [`mail_monitor/README.md`](mail_monitor/README.md)
 
 ## Installation
 
