@@ -20,7 +20,8 @@ const path = require('path');
 const { FileManager } = require('./files');
 const { ValidationError } = require('./validate');
 
-const USER_RE = /^[a-z0-9][a-z0-9_.-]{2,31}$/;
+// wie aaPanel (re.search(r"\W+", name) lehnt ab): nur Buchstaben, Ziffern, Unterstrich
+const USER_RE = /^[a-z0-9][a-z0-9_]{2,31}$/;
 const PASS_RE = /^[A-Za-z0-9!#%+,./:=?@^_~*-]{8,64}$/;
 const PATH_RE = /^\/[A-Za-z0-9._/-]*$/;
 const PASS_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -40,7 +41,7 @@ function generatePassword(len) {
 function checkUsername(name) {
   const u = String(name || '').trim().toLowerCase();
   if (!USER_RE.test(u)) {
-    throw new ValidationError('Benutzername: 3–32 Zeichen, nur Kleinbuchstaben, Ziffern, Punkt, Bindestrich und Unterstrich (Beginn mit Buchstabe oder Ziffer).');
+    throw new ValidationError('Benutzername: 3–32 Zeichen, nur Kleinbuchstaben, Ziffern und Unterstrich (Beginn mit Buchstabe oder Ziffer).');
   }
   return u;
 }
@@ -99,8 +100,10 @@ class FtpService {
   }
 
   // Alle FTP-Konten aus aaPanel - Passwörter werden bewusst verworfen.
-  async panelAccounts(search) {
-    const res = await this.svc.call('data', 'getData', { table: 'ftps', p: 1, limit: 1000, search: search || '' });
+  // Immer die komplette Liste: aaPanels Suche findet Namen mit "_" nicht
+  // (es maskiert "_" als "/_", ESCAPE gilt aber nur für "ps LIKE ?").
+  async panelAccounts() {
+    const res = await this.svc.call('data', 'getData', { table: 'ftps', p: 1, limit: 10000, search: '' });
     const list = Array.isArray(res) ? res : (res && (res.data || res.list)) || [];
     return list
       .filter((r) => r && r.name)
@@ -163,13 +166,13 @@ class FtpService {
     if (this.store.db.prepare("SELECT 1 FROM assignments WHERE type='ftp' AND ref_name=?").get(user)) {
       throw new ValidationError(`Der Benutzername „${user}“ ist bereits vergeben.`);
     }
-    if ((await this.panelAccounts(user)).some((r) => r.name === user)) {
+    if ((await this.panelAccounts()).some((r) => r.name === user)) {
       throw new ValidationError(`Der Benutzername „${user}“ ist bereits vergeben.`);
     }
     const target = this.directory(site, dir);
     await this.svc.call('ftp', 'AddUser', { ftp_username: user, ftp_password: pw, path: target, ps: site.name });
-    const row = (await this.panelAccounts(user)).find((r) => r.name === user);
-    if (!row) throw new ValidationError('Der FTP-Zugang wurde nicht angelegt (aaPanel meldet kein Konto).');
+    const row = (await this.panelAccounts()).find((r) => r.name === user);
+    if (!row) throw new ValidationError(`aaPanel hat das Anlegen bestätigt, das Konto „${user}“ taucht aber nicht in der FTP-Liste auf. Bitte den Administrator prüfen lassen.`);
     this.store.assign(this.customer.id, [{ type: 'ftp', ref_name: user, ref_id: String(row.id) }]);
     this.svc.log('ftp_create', { site: site.name, user, path: target });
     return { user, path: target, password: generated ? pw : null };
