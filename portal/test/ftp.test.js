@@ -28,7 +28,8 @@ function fakePanel() {
       const action = p.split('action=')[1];
       const ok = (message) => ({ status: 0, timestamp: 1, message });
       if (p.startsWith('/v2/data') && params.table === 'ftps') {
-        const rows = ftps.filter((f) => !params.search || f.name.includes(params.search));
+        // wie aaPanel: Suche mit "_" findet nichts (ESCAPE greift nur für "ps LIKE ?")
+        const rows = ftps.filter((f) => !params.search || (!params.search.includes('_') && f.name.includes(params.search)));
         return ok({ where: '', page: '', data: rows.map((f) => Object.assign({}, f)) });
       }
       if (action === 'AddUser') {
@@ -83,7 +84,7 @@ test.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 test('Eingaben: Benutzername/Passwort ohne Shell-Sonderzeichen', () => {
   assert.equal(checkUsername(' Kunde_FTP '), 'kunde_ftp');
-  for (const bad of ['ab', 'a b', 'x;rm', 'x$y', '-abc', 'a'.repeat(33), 'äbc']) {
+  for (const bad of ['ab', 'a b', 'x;rm', 'x$y', '-abc', 'a.bc', 'a-bc', 'a'.repeat(33), 'äbc']) {
     assert.throws(() => checkUsername(bad), ValidationError, bad);
   }
   assert.equal(checkPassword('Geheim123!'), 'Geheim123!');
