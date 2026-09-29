@@ -4,7 +4,8 @@ aaPanel-Plugin zum Anlegen von Kunden und Zuordnen von Websites, Mail-Domains
 und Postfächern – plus eigenständiges **Kundenportal** (Node.js, `portal/`), in
 dem Kunden ihre Websites (inkl. Subdomains, SSL, PHP, Weiterleitungen und
 Dateimanager mit Upload), FTP-Zugänge (nur innerhalb der eigenen Website) und
-Postfächer selbst verwalten.
+Postfächer selbst verwalten – inklusive Mail-Sicherung (Download, automatische
+tägliche Sicherung laut Paket, Wiederherstellen in einen eigenen Ordner).
 
 - Admin-Plugin: `customer_mgr_main.py`, `cm_*.py`, `templates/`, `static/`
 - Kundenportal: `portal/` – Deployment und Funktionsumfang siehe

@@ -38,6 +38,8 @@ const DEFAULT_CFG = {
   server_ipv6: '',
   portal_name: 'KundenPortal',
   ftp_host: '', // FTP-Server-Adresse für Kunden (leer = Server-IPv4)
+  mail_backup_dir: '/www/backup/customer_mgr_mail', // Ablage der Postfach-Sicherungen
+  mail_backup_hour: 3, // Stunde der automatischen Sicherung (0-23, Serverzeit)
 };
 
 const PBKDF2_ITERATIONS = 600000; // muss mit cm_store.py übereinstimmen (Cross-Language-Hash-Kompatibilität)
@@ -94,6 +96,8 @@ CREATE TABLE IF NOT EXISTS packages (
   ssl_allowed INTEGER NOT NULL DEFAULT 1,
   ftp_allowed INTEGER NOT NULL DEFAULT 1,
   max_ftp INTEGER NOT NULL DEFAULT 0,
+  mail_backup_allowed INTEGER NOT NULL DEFAULT 1,
+  mail_backup_days INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -118,6 +122,22 @@ CREATE INDEX IF NOT EXISTS idx_asg_customer ON assignments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_log_customer ON audit_log(customer_id);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_login ON portal_login_attempts(login, ts);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON portal_login_attempts(ip, ts);
+CREATE TABLE IF NOT EXISTS mail_backups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  mailbox TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'manual',
+  status TEXT NOT NULL DEFAULT 'queued',
+  file TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  messages INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT '',
+  restore_status TEXT NOT NULL DEFAULT '',
+  restore_folder TEXT NOT NULL DEFAULT '',
+  restore_error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER, finished_at INTEGER, restored_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mail_backups_customer ON mail_backups(customer_id, mailbox);
 `;
 
 const MIGRATIONS = [
@@ -129,6 +149,8 @@ const MIGRATIONS = [
   ['customers', 'package_id', 'INTEGER'],
   ['packages', 'ftp_allowed', 'INTEGER NOT NULL DEFAULT 1'],
   ['packages', 'max_ftp', 'INTEGER NOT NULL DEFAULT 0'],
+  ['packages', 'mail_backup_allowed', 'INTEGER NOT NULL DEFAULT 1'],
+  ['packages', 'mail_backup_days', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 function columnExists(db, table, col) {

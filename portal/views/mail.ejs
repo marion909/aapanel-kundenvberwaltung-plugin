@@ -47,6 +47,7 @@
   <td><% if (b.state === 'missing') { %><span class="badge warn">im Panel nicht mehr vorhanden</span><% } else { %><span class="badge on">aktiv</span><% } %></td>
   <td class="actions">
     <% if (b.state !== 'missing') { %>
+    <% if (limits.mail_backup) { %><a class="btn" href="/mail/boxes/<%= b.id %>/backups">Sicherungen</a><% } %>
     <form method="post" action="/mail/boxes/<%= b.id %>/password" class="inline">
       <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
       <input type="password" name="password" placeholder="neues Passwort" required minlength="8">

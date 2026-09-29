@@ -477,6 +477,7 @@
             <dt>Upload pro Datei</dt><dd>${p.max_upload_mb ? p.max_upload_mb + ' MB' : 'Standard'}</dd>
             <dt>SSL durch Kunden</dt><dd>${p.ssl_allowed ? 'ja' : 'nein'}</dd>
             <dt>FTP-Zugänge</dt><dd>${p.ftp_allowed ? lim(p.max_ftp) : 'nein'}</dd>
+            <dt>Mail-Sicherung</dt><dd>${p.mail_backup_allowed === 0 ? 'nein' : (p.mail_backup_days ? 'täglich, ' + p.mail_backup_days + ' Tage' : 'nur manuell')}</dd>
           </dl>
           <div class="actions"><button type="button" data-edit="${p.id}">Bearbeiten</button>
             <button type="button" class="danger" data-del="${p.id}">Löschen</button></div>
@@ -499,10 +500,11 @@
     $('#pk-title').textContent = p ? 'Paket bearbeiten' : 'Neues Paket';
     f.elements.id.value = p ? p.id : '';
     if (p) {
-      ['name', 'description', 'max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes', 'mailbox_quota_mb', 'max_upload_mb', 'max_ftp']
+      ['name', 'description', 'max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes', 'mailbox_quota_mb', 'max_upload_mb', 'max_ftp', 'mail_backup_days']
         .forEach((k) => { f.elements[k].value = p[k] == null ? '' : p[k]; });
       f.elements.ssl_allowed.checked = !!p.ssl_allowed;
       f.elements.ftp_allowed.checked = p.ftp_allowed === undefined ? true : !!p.ftp_allowed;
+      f.elements.mail_backup_allowed.checked = p.mail_backup_allowed === undefined ? true : !!p.mail_backup_allowed;
     }
     $('#dlg-package').showModal();
     f.elements.name.focus();
@@ -514,6 +516,7 @@
     const data = Object.fromEntries(new FormData(f).entries());
     data.ssl_allowed = f.elements.ssl_allowed.checked;
     data.ftp_allowed = f.elements.ftp_allowed.checked;
+    data.mail_backup_allowed = f.elements.mail_backup_allowed.checked;
     if (!data.id) delete data.id;
     try {
       const r = await api('save_package', { payload: data });
@@ -597,9 +600,9 @@
       const f = $('#settings-form');
       ['base_url', 'data_path', 'site_project_types', 'mail_plugin_paths', 'mail_domains_method', 'mail_boxes_method',
        'mail_box_create_method', 'mail_box_setpw_method', 'mail_box_delete_method', 'mail_box_default_quota', 'customer_prefix',
-       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6', 'portal_name', 'ftp_host']
+       'site_path_template', 'site_api_prefixes', 'cf_email', 'server_ipv4', 'server_ipv6', 'portal_name', 'ftp_host', 'mail_backup_dir']
         .forEach((k) => { f.elements[k].value = s[k] || ''; });
-      ['site_default_max_sites', 'portal_max_upload_mb'].forEach((k) => { f.elements[k].value = s[k] == null ? '' : s[k]; });
+      ['site_default_max_sites', 'portal_max_upload_mb', 'mail_backup_hour'].forEach((k) => { f.elements[k].value = s[k] == null ? '' : s[k]; });
       f.elements.cf_proxied.checked = !!s.cf_proxied;
       renderLogo(s.logo_data_url);
       f.elements.cf_api_key.value = '';
