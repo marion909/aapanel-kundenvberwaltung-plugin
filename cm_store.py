@@ -37,6 +37,8 @@ DEFAULT_CFG = {
     'server_ipv6': '',
     'portal_name': 'KundenPortal',        # Name im Kundenportal (Seitenleiste, Login, Titel)
     'ftp_host': '',                       # FTP-Server-Adresse für Kunden (leer = Server-IPv4)
+    'mail_backup_dir': '/www/backup/customer_mgr_mail',  # Ablage der Postfach-Sicherungen
+    'mail_backup_hour': 3,                # Stunde der automatischen Sicherung (0-23, Serverzeit)
 }
 
 PBKDF2_ITERATIONS = 600000  # aktuelle OWASP-Empfehlung für PBKDF2-SHA256
@@ -93,6 +95,8 @@ CREATE TABLE IF NOT EXISTS packages (
   ssl_allowed INTEGER NOT NULL DEFAULT 1,
   ftp_allowed INTEGER NOT NULL DEFAULT 1,
   max_ftp INTEGER NOT NULL DEFAULT 0,
+  mail_backup_allowed INTEGER NOT NULL DEFAULT 1,
+  mail_backup_days INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER, updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS assignments (
@@ -117,6 +121,22 @@ CREATE INDEX IF NOT EXISTS idx_asg_customer ON assignments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_log_customer ON audit_log(customer_id);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_login ON portal_login_attempts(login, ts);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON portal_login_attempts(ip, ts);
+CREATE TABLE IF NOT EXISTS mail_backups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  mailbox TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'manual',
+  status TEXT NOT NULL DEFAULT 'queued',
+  file TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  messages INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT '',
+  restore_status TEXT NOT NULL DEFAULT '',
+  restore_folder TEXT NOT NULL DEFAULT '',
+  restore_error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER, finished_at INTEGER, restored_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mail_backups_customer ON mail_backups(customer_id, mailbox);
 """
 
 # Migration für Bestandsinstallationen: SCHEMA legt neue Spalten nur bei
@@ -130,6 +150,8 @@ _MIGRATIONS = (
     ('customers', 'package_id', "INTEGER"),
     ('packages', 'ftp_allowed', "INTEGER NOT NULL DEFAULT 1"),
     ('packages', 'max_ftp', "INTEGER NOT NULL DEFAULT 0"),
+    ('packages', 'mail_backup_allowed', "INTEGER NOT NULL DEFAULT 1"),
+    ('packages', 'mail_backup_days', "INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -204,7 +226,7 @@ def save_cfg(cfg):
 # ---------- Hosting-Pakete ----------
 # Alle Limits sind Anzahlen; 0 = unbegrenzt. mailbox_quota_mb/max_upload_mb: 0 = Standard aus den Einstellungen.
 PACKAGE_INT_FIELDS = ('max_sites', 'max_domains', 'max_mail_domains', 'max_mailboxes',
-                      'mailbox_quota_mb', 'max_upload_mb', 'max_ftp')
+                      'mailbox_quota_mb', 'max_upload_mb', 'max_ftp', 'mail_backup_days')
 # Zuordnungstyp -> Paketfeld
 LIMIT_FIELD = {'site': 'max_sites', 'domain': 'max_domains', 'mail_domain': 'max_mail_domains',
                'mailbox': 'max_mailboxes', 'ftp': 'max_ftp'}
@@ -241,6 +263,8 @@ def effective_limits(customer, package, cfg):
         'ssl': bool(pkg.get('ssl_allowed', 1)) if package else True,
         'ftp': int(pkg.get('max_ftp') or 0),
         'ftp_allowed': bool(pkg.get('ftp_allowed', 1)) if package else True,
+        'mail_backup': bool(pkg.get('mail_backup_allowed', 1)) if package else True,
+        'mail_backup_days': int(pkg.get('mail_backup_days') or 0),
     }
 
 
@@ -567,6 +591,7 @@ class Store(object):
             vals[k] = v
         vals['ssl_allowed'] = 1 if data.get('ssl_allowed', True) not in (False, 0, '0', 'false', '') else 0
         vals['ftp_allowed'] = 1 if data.get('ftp_allowed', True) not in (False, 0, '0', 'false', '') else 0
+        vals['mail_backup_allowed'] = 1 if data.get('mail_backup_allowed', True) not in (False, 0, '0', 'false', '') else 0
         now = int(time.time())
         pid = data.get('id')
         dup = self.db.execute('SELECT id FROM packages WHERE name=? COLLATE NOCASE AND id<>?',

@@ -248,3 +248,4 @@ code { background: var(--bg); border: 1px solid var(--border); border-radius: 4p
   ul.flash li.error { background: #3a1414; }
   button.danger { background: #1c222a; }
 }
+small.error { color: var(--danger); }

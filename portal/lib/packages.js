@@ -24,6 +24,8 @@ function effectiveLimits(customer, pkg, cfg) {
     ssl: pkg ? !!Number(p.ssl_allowed === undefined ? 1 : p.ssl_allowed) : true,
     ftp: Number(p.max_ftp) || 0,
     ftp_allowed: pkg ? !!Number(p.ftp_allowed === undefined ? 1 : p.ftp_allowed) : true,
+    mail_backup: pkg ? !!Number(p.mail_backup_allowed === undefined ? 1 : p.mail_backup_allowed) : true,
+    mail_backup_days: Number(p.mail_backup_days) || 0,
   };
 }
 

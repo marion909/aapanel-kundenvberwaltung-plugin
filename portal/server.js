@@ -34,6 +34,9 @@ const MAX_ATTEMPTS_PER_LOGIN = 5;
 const MAX_ATTEMPTS_PER_IP = 20;
 
 const cache = new resources.ResourceCache();
+// Postfach-Sicherungen: eigene DB-Verbindung, Abarbeitung im Hintergrund
+const { MailBackups } = require('./lib/mailbackup');
+const mailBackups = new MailBackups();
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -245,6 +248,9 @@ require('./routes/overview')(app, { loginRequired, asyncHandler, cache });
 // ---------- Websites (Liste, Anlegen, Konfiguration, Dateimanager) ----------
 require('./routes/sites')(app, { loginRequired, ownedAssignment, asyncHandler, flash, cache, HttpError });
 
+// ---------- Mail-Sicherungen ----------
+require('./routes/mail-backup')(app, { loginRequired, ownedAssignment, asyncHandler, flash, HttpError, backups: mailBackups });
+
 // ---------- Mail ----------
 app.get(
   '/mail',
@@ -363,9 +369,11 @@ app.use((err, req, res, next) => {
 
 if (require.main === module) {
   const port = parseInt(process.env.PORT || '8901', 10);
+  mailBackups.start();
   app.listen(port, '127.0.0.1', () => {
     console.log(`Kundenportal läuft auf http://127.0.0.1:${port}`); // eslint-disable-line no-console
   });
 }
 
 module.exports = app;
+module.exports.mailBackups = mailBackups;

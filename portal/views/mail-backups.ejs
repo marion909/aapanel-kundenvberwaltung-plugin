@@ -1,0 +1,77 @@
+<%- include('partials/header') %>
+<% if (busy) { %><meta http-equiv="refresh" content="10"><% } %>
+<p class="crumb"><a href="/mail">← E-Mail</a></p>
+<div class="head-row">
+  <h1>Sicherungen</h1>
+  <span class="hint mono"><%= box.ref_name %></span>
+</div>
+
+<% if (!limits.mail_backup) { %>
+<p class="empty">Mail-Sicherungen sind in Ihrem Paket nicht enthalten.</p>
+<% } else { %>
+<section class="box">
+  <h2>Neue Sicherung</h2>
+  <p class="hint">
+    <% if (limits.mail_backup_days) { %>Dieses Postfach wird automatisch täglich gesichert, Aufbewahrung <%= limits.mail_backup_days %> Tage.<% } else { %>Automatische Sicherungen sind in Ihrem Paket nicht enthalten.<% } %>
+    Zusätzlich können Sie jederzeit selbst sichern (die letzten 3 manuellen Sicherungen bleiben 30 Tage erhalten).
+  </p>
+  <form method="post" action="/mail/boxes/<%= box.id %>/backups" class="inline">
+    <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+    <button type="submit" class="primary" <%= busy ? 'disabled' : '' %>>Jetzt sichern</button>
+  </form>
+</section>
+
+<section class="box">
+  <h2>Vorhandene Sicherungen</h2>
+  <% if (!list.length) { %><p class="empty">Noch keine Sicherungen.</p><% } else { %>
+  <table class="res">
+    <thead><tr><th>Datum</th><th>Art</th><th>Status</th><th>Größe</th><th></th></tr></thead>
+    <tbody>
+    <% list.forEach(function (b) { %>
+      <tr>
+        <td><%= fmttime(b.created_at) %></td>
+        <td><%= b.kind === 'auto' ? 'automatisch' : 'manuell' %></td>
+        <td>
+          <% if (b.status === 'queued') { %><span class="badge off">wartet</span>
+          <% } else if (b.status === 'running') { %><span class="badge warn">läuft<%= b.messages ? ' · ' + b.messages + ' Nachrichten' : '' %></span>
+          <% } else if (b.status === 'error') { %><span class="badge warn" title="<%= b.error %>">fehlgeschlagen</span> <small><%= b.error %></small>
+          <% } else { %><span class="badge on">fertig</span> <small><%= b.messages %> Nachrichten</small><% } %>
+          <% if (b.restore_status === 'queued' || b.restore_status === 'running') { %><br><span class="badge warn">wird wiederhergestellt …</span>
+          <% } else if (b.restore_status === 'done') { %><br><small>wiederhergestellt in „<%= b.restore_folder %>“</small>
+          <% } else if (b.restore_status === 'error') { %><br><small class="error">Wiederherstellung fehlgeschlagen: <%= b.restore_error %></small><% } %>
+        </td>
+        <td><%= b.status === 'done' ? fmtBytes(b.size) : '–' %></td>
+        <td class="actions">
+          <% if (b.status === 'done') { %>
+          <a class="btn" href="/mail/boxes/<%= box.id %>/backups/<%= b.id %>/download">Herunterladen</a>
+          <% if (b.restore_status !== 'done' && b.restore_status !== 'queued' && b.restore_status !== 'running') { %>
+          <form method="post" action="/mail/boxes/<%= box.id %>/backups/<%= b.id %>/restore" class="inline" data-confirm="Sicherung vom <%= fmttime(b.created_at) %> wiederherstellen? Die Nachrichten werden in einen neuen Ordner „Wiederhergestellt-…“ kopiert, vorhandene Nachrichten bleiben unverändert.">
+            <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+            <button type="submit">Wiederherstellen</button>
+          </form>
+          <% } %>
+          <% } %>
+          <% if (b.status !== 'running' && b.status !== 'queued' && b.restore_status !== 'running') { %>
+          <form method="post" action="/mail/boxes/<%= box.id %>/backups/<%= b.id %>/delete" class="inline" data-confirm="Sicherung löschen?">
+            <input type="hidden" name="csrf_token" value="<%= csrfToken %>">
+            <button type="submit" class="danger">Löschen</button>
+          </form>
+          <% } %>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+
+<section class="box">
+  <h2>So nutzen Sie eine Sicherung</h2>
+  <ul>
+    <li>Die Datei <code>.tar.gz</code> mit Windows 11, macOS oder 7-Zip entpacken. Jede Nachricht ist eine <code>.eml</code>-Datei, sortiert nach Ordnern – per Doppelklick lesbar.</li>
+    <li>Import in Thunderbird: Add-on „ImportExportTools NG“ → „Alle Nachrichten aus einem Verzeichnis importieren“.</li>
+    <li><strong>Wiederherstellen</strong> kopiert alle Nachrichten der Sicherung in einen neuen Ordner „Wiederhergestellt-Datum“ in diesem Postfach. Es wird nichts überschrieben oder gelöscht.</li>
+  </ul>
+</section>
+<% } %>
+<%- include('partials/footer') %>

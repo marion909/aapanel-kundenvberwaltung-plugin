@@ -42,6 +42,9 @@ const ACTION_LABELS = {
   portal_ftp_enable: 'FTP-Zugang aktiviert',
   portal_ftp_disable: 'FTP-Zugang gesperrt',
   portal_ftp_delete: 'FTP-Zugang gelöscht',
+  portal_mail_backup: 'Postfach gesichert',
+  portal_mail_backup_auto: 'Postfach automatisch gesichert',
+  portal_mail_restore: 'Postfach-Sicherung wiederhergestellt',
 };
 
 function journalDetail(raw) {

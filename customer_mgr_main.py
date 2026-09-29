@@ -395,6 +395,22 @@ class customer_mgr_main:
                     cfg[k] = max(0, int(data[k]))
                 except (TypeError, ValueError):
                     raise ValueError('{} muss eine Zahl sein'.format(k))
+        if 'mail_backup_hour' in data and str(data['mail_backup_hour']).strip() != '':
+            try:
+                hour = int(data['mail_backup_hour'])
+            except (TypeError, ValueError):
+                hour = -1
+            if not 0 <= hour <= 23:
+                raise ValueError('Uhrzeit der Mail-Sicherung: Stunde 0 bis 23')
+            cfg['mail_backup_hour'] = hour
+        if 'mail_backup_dir' in data:
+            bdir = os.path.normpath(str(data['mail_backup_dir'] or '').strip() or '/www/backup/customer_mgr_mail')
+            # nie in einem Web-Verzeichnis oder direkt in System-/Mail-Ordnern ablegen
+            if (not bdir.startswith('/') or bdir.count('/') < 2 or bdir.startswith('/www/wwwroot')
+                    or bdir.startswith('/www/vmail') or bdir.startswith('/www/server')
+                    or bdir.split('/')[1] in ('etc', 'usr', 'bin', 'sbin', 'lib', 'proc', 'sys', 'dev', 'boot', 'root')):
+                raise ValueError('Ablage der Mail-Sicherungen: bitte einen eigenen Ordner außerhalb der Websites wählen, z. B. /www/backup/customer_mgr_mail')
+            cfg['mail_backup_dir'] = bdir
         tpl = cfg.get('site_path_template') or ''
         if '{host}' not in tpl or not tpl.startswith('/'):
             raise ValueError('Pfad-Vorlage für Websites muss absolut sein und {host} enthalten')

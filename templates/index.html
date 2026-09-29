@@ -107,6 +107,8 @@
       <h2>Branding im Kundenportal</h2>
       <label>Portal-Name <input name="portal_name" maxlength="60" placeholder="KundenPortal"><small>Erscheint in der Seitenleiste (wenn kein Logo), auf der Login-Seite und im Browser-Tab.</small></label>
       <label>FTP-Server für Kunden <input name="ftp_host" placeholder="z. B. ftp.neuhauser.cloud"><small>Wird Kunden im Portal als FTP-Adresse angezeigt (leer = Server-IPv4).</small></label>
+      <label>Mail-Sicherungen: Ablage <input name="mail_backup_dir" placeholder="/www/backup/customer_mgr_mail"><small>Ordner außerhalb der Websites; braucht Platz für alle aufbewahrten Sicherungen.</small></label>
+      <label>Mail-Sicherungen: Uhrzeit (Stunde) <input name="mail_backup_hour" type="number" min="0" max="23" placeholder="3"><small>Ab dieser Stunde (Serverzeit) laufen die täglichen automatischen Sicherungen.</small></label>
       <div class="logo-box">
         <div class="logo-preview" id="logo-preview"><span class="hint">Kein Logo hinterlegt</span></div>
         <div class="logo-actions">
@@ -245,6 +247,7 @@
         <dt>Upload pro Datei</dt><dd>Maximale Dateigröße im Dateimanager (0 = Standard aus den Einstellungen).</dd>
         <dt>SSL durch Kunden</dt><dd>Aus = der Kunde sieht seine Zertifikate, kann aber keine ausstellen, erzwingen oder deaktivieren.</dd>
         <dt>FTP-Zugänge</dt><dd>Anzahl FTP-Zugänge, die der Kunde im Portal selbst anlegen darf. Der Haken „FTP erlauben“ schaltet die Funktion ganz ab.</dd>
+        <dt>Mail-Sicherung</dt><dd>Haken = Kunde darf Postfächer selbst sichern, herunterladen und wiederherstellen. „Aufbewahrung (Tage)“ &gt; 0 sichert zusätzlich jedes Postfach täglich automatisch und hält die Sicherungen so viele Tage vor.</dd>
       </dl>
       <ul>
         <li>Bei allen Anzahlen gilt <strong>0 = unbegrenzt</strong>. Ohne Paket sind Mail-Domains, Postfächer und Domain-Bereiche unbegrenzt, für Websites gilt der Standard aus den Einstellungen.</li>
@@ -273,6 +276,7 @@
         <li><strong>FTP:</strong> FTP-Zugänge pro Website anlegen (optional auf einen Unterordner beschränkt), Passwort ändern, sperren/entsperren, löschen. Das FTP-Konto ist in aaPanel (Pure-FTPd) auf sein Verzeichnis eingesperrt und kommt nicht aus der Website heraus.</li>
         <li><strong>SSL:</strong> Übersicht aller Zertifikate mit Restlaufzeit.</li>
         <li><strong>Mailserver:</strong> Postfächer anlegen, Passwort ändern, löschen (in zugeordneten Mail-Domains).</li>
+        <li><strong>Mail-Sicherung:</strong> pro Postfach „Jetzt sichern“, Download als <code>.tar.gz</code> (eine <code>.eml</code>-Datei pro Nachricht, nach Ordnern), automatische tägliche Sicherung laut Paket und Wiederherstellen in einen neuen Ordner „Wiederhergestellt-Datum“ (über <code>doveadm import</code>, nichts wird überschrieben). Sicherungen liegen unter der eingestellten Ablage, nie in einer Website. Das Portal braucht dafür Lesezugriff auf <code>/www/vmail</code> (läuft als root).</li>
         <li><strong>Journal:</strong> Protokoll aller Aktionen des Kunden und der Admin-Zuordnungen.</li>
         <li>Das Portal ist für Handys optimiert (Menü über ☰).</li>
       </ul>
@@ -415,7 +419,7 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
       <label>Kundennummer <input name="customer_no" placeholder="automatisch"></label>
       <label class="wide">Hosting-Paket
         <select name="package_id"><option value="">– kein Paket –</option></select>
-        <small>Legt die Limits fest (Websites, Domain-Bereiche, Mail-Domains, Postfächer, Postfach-Größe, Upload, SSL, FTP).</small>
+        <small>Legt die Limits fest (Websites, Domain-Bereiche, Mail-Domains, Postfächer, Postfach-Größe, Upload, SSL, FTP, Mail-Sicherung).</small>
       </label>
       <label>Max. Websites (Abweichung) <input name="max_sites" type="number" min="-1" placeholder="-1"><small>-1 = laut Paket, 0 = unbegrenzt</small></label>
       <label>Status
@@ -472,8 +476,10 @@ proxy_set_header X-Forwarded-Proto $scheme;   # sonst klappt der Login nicht</pr
       <label>Postfach-Größe (MB) <input name="mailbox_quota_mb" type="number" min="0" value="0"><small>0 = Standard aus Einstellungen</small></label>
       <label>Max. Upload pro Datei (MB) <input name="max_upload_mb" type="number" min="0" value="0"><small>0 = Standard aus Einstellungen</small></label>
       <label>FTP-Zugänge <input name="max_ftp" type="number" min="0" value="0"></label>
+      <label>Mail-Sicherung: Aufbewahrung (Tage) <input name="mail_backup_days" type="number" min="0" value="0"><small>tägliche automatische Sicherung jedes Postfachs; 0 = keine automatische Sicherung</small></label>
       <label class="wide check"><input type="checkbox" name="ssl_allowed" checked> Kunde darf SSL-Zertifikate selbst ausstellen und verwalten</label>
       <label class="wide check"><input type="checkbox" name="ftp_allowed" checked> Kunde darf FTP-Zugänge für seine Websites anlegen</label>
+      <label class="wide check"><input type="checkbox" name="mail_backup_allowed" checked> Kunde darf Postfächer sichern, Sicherungen herunterladen und wiederherstellen</label>
     </div>
     <p class="hint">Bei allen Anzahlen gilt: 0 = unbegrenzt.</p>
     <p class="form-err" id="pk-err"></p>

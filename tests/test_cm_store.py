@@ -180,6 +180,10 @@ class CmStoreTest(unittest.TestCase):
         pid2 = self.store.save_package({'name': 'NoFtp', 'max_ftp': 3, 'ftp_allowed': False})
         self.assertEqual((self.store.get_package(pid2)['max_ftp'], self.store.get_package(pid2)['ftp_allowed']), (3, 0))
         self.store.delete_package(pid2)
+        pid3 = self.store.save_package({'name': 'Backup', 'mail_backup_days': '7', 'mail_backup_allowed': 'false'})
+        p3 = self.store.get_package(pid3)
+        self.assertEqual((p3['mail_backup_days'], p3['mail_backup_allowed']), (7, 0))
+        self.store.delete_package(pid3)
         with self.assertRaises(ValueError):
             self.store.save_package({'name': 'business'})  # Name eindeutig (ohne Groß/Klein)
         with self.assertRaises(ValueError):
@@ -214,6 +218,11 @@ class CmStoreTest(unittest.TestCase):
         self.assertFalse(eff({'max_sites': -1}, dict(pkg, max_ftp=2, ftp_allowed=0), cfg)['ftp_allowed'])
         self.assertEqual(eff({'max_sites': -1}, dict(pkg, max_ftp=2), cfg)['ftp'], 2)
         self.assertTrue(eff({'max_sites': -1}, None, cfg)['ftp_allowed'])
+        # Mail-Sicherung: ohne Paket nur manuell, sonst laut Paket
+        self.assertEqual((lim['mail_backup'], lim['mail_backup_days']), (True, 0))
+        lim2 = eff({'max_sites': -1}, dict(pkg, mail_backup_allowed=0, mail_backup_days=14), cfg)
+        self.assertEqual((lim2['mail_backup'], lim2['mail_backup_days']), (False, 14))
+        self.assertEqual(eff({'max_sites': -1}, None, cfg)['mail_backup_days'], 0)
 
     def test_assign_enforces_package_limits_unless_forced(self):
         pid = self.store.save_package({'name': 'Mini', 'max_sites': 1, 'max_domains': 1})
