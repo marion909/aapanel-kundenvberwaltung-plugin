@@ -173,8 +173,15 @@ class Config(object):
 
 def load_config(path):
     parser = configparser.ConfigParser(interpolation=None)
-    if not parser.read(path, encoding='utf-8'):
-        raise ConfigError('Konfiguration nicht lesbar: %s' % path)
+    if not os.path.isfile(path):
+        example = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               'mail_monitor.example.ini')
+        raise ConfigError('%s existiert nicht. Vorlage kopieren und anpassen:\n'
+                          '  cp %s %s && chmod 600 %s' % (path, example, path, path))
+    try:
+        parser.read(path, encoding='utf-8')
+    except (OSError, configparser.Error) as e:
+        raise ConfigError('%s nicht lesbar: %s' % (path, e))
     try:
         return Config(parser)
     except ValueError as e:
